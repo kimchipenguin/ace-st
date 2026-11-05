@@ -1,0 +1,6 @@
+wait 15
+type load
+wait 1
+dbg r
+dbg m "a5+$2400" 768
+wait 1

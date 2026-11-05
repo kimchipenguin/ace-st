@@ -1,0 +1,7 @@
+wait 12
+dbg profile on
+wait 3
+dbg profile stats
+dbg profile counts 40
+dbg r
+wait 1

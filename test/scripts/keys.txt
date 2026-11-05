@@ -1,0 +1,6 @@
+wait 30
+type lo
+wait 1
+dbg m "a5+$26e0" 32
+dbg m "a5+$3c00" 64
+wait 1

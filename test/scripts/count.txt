@@ -1,0 +1,7 @@
+wait 15
+dbg m "a6+$d44" 8
+dbg r
+wait 5
+dbg m "a6+$d44" 8
+dbg r
+wait 1

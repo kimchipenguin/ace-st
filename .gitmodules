@@ -1,0 +1,3 @@
+[submodule "xAce"]
+	path = xAce
+	url = https://github.com/epatel/xAce.git

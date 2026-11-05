@@ -1,0 +1,18 @@
+wait 15
+type ._
+wait 2
+type 1 2 + ._
+wait 2
+type : x begin 0 until ;_
+wait 2
+type x_
+wait 3
+down 0x2a
+down 0x39
+wait 1
+up 0x39
+up 0x2a
+wait 2
+type 3 4 * ._
+wait 2
+shot

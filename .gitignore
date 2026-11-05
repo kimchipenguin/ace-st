@@ -1,0 +1,17 @@
+# build outputs
+*.PRG
+test/oracle/oracle
+
+# Jupiter Ace ROM: not distributed
+ace.rom
+ACE.ROM
+
+# test rig output and Hatari state
+test/hd/
+test/shots/
+test/.hatari-home/
+
+# not part of the project
+session-export-*/
+testgame/
+.DS_Store

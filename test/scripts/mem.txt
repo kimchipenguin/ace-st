@@ -1,0 +1,4 @@
+wait 10
+dbg m $1dd22 768
+dbg m $1e622 64
+wait 1
