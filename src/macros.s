@@ -89,10 +89,23 @@ CHKINT  macro
 ; ---------------------------------------------------------------------------
 ; memory
 ; ---------------------------------------------------------------------------
-; d1.l = address (upper word clear), d2.b = value.  Clobbers d0 (slow path).
+; d1.l = address (upper word clear), d2.b = value.  Clobbers d0 and a2.
+; The 1K user RAM (3000-3FFF, mirrored four times; Forth data stack and
+; system variables) is handled inline, ROM/video/character RAM in store_low.
 STORE   macro
         cmp.w   #$4000,d1
         bcc.s   .ok\@
+        cmp.w   #$3000,d1
+        bcs.s   .lo\@
+        move.w  d1,d0
+        and.w   #$03ff,d0
+        lea     (a5,d0.w),a2
+        move.b  d2,$3000(a2)
+        move.b  d2,$3400(a2)
+        move.b  d2,$3800(a2)
+        move.b  d2,$3c00(a2)
+        bra.s   .dn\@
+.lo\@:
         jsr     store_low
         bra.s   .dn\@
 .ok\@:
@@ -100,7 +113,7 @@ STORE   macro
 .dn\@:
         endm
 
-; d1 = address, d2.w = value (little endian).  Clobbers d0,d1,d2.
+; d1 = address, d2.w = value (little endian).  Clobbers d0,d1,d2,a2.
 STOREW  macro
         STORE
         addq.w  #1,d1
