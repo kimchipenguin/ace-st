@@ -1,0 +1,29 @@
+# Help shows the keyboard picture over the running game, keys are ignored,
+# Esc goes back; Help twice at the prompt
+wait 15
+key 0x62
+wait 2
+shot
+type x
+key 0x62
+wait 2
+shot
+type load graphics_
+wait 5
+type gr_
+wait 6
+type forget gr_
+wait 3
+type load run_
+wait 5
+type run_
+wait 8
+key 0x1c
+wait 6
+key 0x62
+wait 2
+shot
+type z
+key 0x01
+wait 2
+shot

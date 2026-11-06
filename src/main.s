@@ -4,7 +4,8 @@
 ;
 ; Build:  make   (vasm, Motorola syntax, -Ftos)
 ; Needs:  ACE.ROM (8192 bytes) in the current directory, ST high (mono).
-; Keys:   Undo quits, Control+O picks the tape file (GEM file selector).
+; Keys:   Undo quits, Control+O picks the tape file (GEM file selector),
+;         Help shows the Ace keyboard (Help or Esc goes back).
 ; GPL v2 or later.
 ; ---------------------------------------------------------------------------
 
@@ -203,7 +204,12 @@ leave:
 ; called from do_int every 20 ms with the Z80 registers live: save everything
 host_service:
         movem.l d0-d7/a0-a6,-(sp)
-        tst.b   quit_flag
+        tst.b   help_req
+        beq.s   .nh
+        jsr     help_show                   ; Help: keyboard picture
+        jsr     refresh_screen
+        movem.l (sp),d0-d7/a0-a6
+.nh:    tst.b   quit_flag
         bne     shutdown
         tst.b   open_flag
         beq.s   .no
@@ -221,6 +227,45 @@ host_service:
         jsr     refresh_screen              ; ~12.5 Hz like xAce
 .nr:    movem.l (sp)+,d0-d7/a0-a6
         rts
+
+; Help: show EightyOne's Jupiter Ace keyboard picture (512x223, 1 bit)
+; centred on a white screen; the Ace stops until Help or Esc (or Undo).
+help_show:
+        clr.b   help_req
+        movea.l scr_ptr,a0
+        movea.l a0,a1
+        moveq   #0,d1
+        move.w  #(32000/4)-1,d0
+.clr:   move.l  d1,(a0)+
+        dbra    d0,.clr
+        lea     KBPIC_Y*80+8(a1),a1
+        lea     kbpic,a0
+        move.w  #KBPIC_H-1,d0
+.row:   moveq   #15,d1
+.cp:    move.l  (a0)+,(a1)+
+        dbra    d1,.cp
+        lea     80-64(a1),a1
+        dbra    d0,.row
+        clr.b   help_close
+        st      help_on
+.wait:  tst.b   quit_flag
+        bne.s   .done
+        tst.b   help_close
+        beq.s   .wait
+.done:  clr.b   help_on
+        lea     keyrows,a0                  ; all Ace keys up
+        moveq   #-1,d0
+        move.l  d0,(a0)+
+        move.l  d0,(a0)
+        movea.l scr_ptr,a0                  ; black screen, full redraw
+        move.w  #(32000/4)-1,d0
+.blk:   move.l  #-1,(a0)+
+        dbra    d0,.blk
+        st      state+ST_REDRAW
+        rts
+
+KBPIC_H equ 223
+KBPIC_Y equ (400-KBPIC_H)/2
 
 ; ---------------------------------------------------------------------------
 ; Interrupt handlers
@@ -259,7 +304,19 @@ ikbd_isr:
 .key:   cmp.b   #$61,d1                     ; Undo make code = quit
         bne.s   .ctl
         st      quit_flag
-.ctl:   move.b  d1,d0
+.ctl:   tst.b   help_on                     ; keyboard picture shown:
+        beq.s   .hlp                        ; swallow keys, Help/Esc close it
+        cmp.b   #$62,d1
+        beq.s   .hcl
+        cmp.b   #$01,d1
+        bne     .loop
+.hcl:   st      help_close
+        bra     .loop
+.hlp:   cmp.b   #$62,d1                     ; Help make: show the keyboard
+        bne.s   .ctl2
+        st      help_req
+        bra     .loop
+.ctl2:  move.b  d1,d0
         and.b   #$7f,d0
         cmp.b   #$1d,d0                     ; Control (no Ace key): track it
         bne.s   .o
@@ -326,6 +383,8 @@ tracename: dc.b "TRACE.BIN",0
 tracename2: dc.b "TRACEINT.BIN",0
 tracename3: dc.b "TRACEMEM.BIN",0
 tracename4: dc.b "TRACEIN.BIN",0
+          even
+kbpic:    incbin "kbpic.bin"                ; tools/kbpic.py, from EightyOne
 msg_mem:  dc.b  "Not enough memory for the trace buffer.",13,10,0
           even
 
@@ -353,6 +412,9 @@ tc_div:      ds.b 1
 svc_tick:    ds.b 1
 quit_flag:   ds.b 1
 open_flag:   ds.b 1
+help_req:    ds.b 1
+help_on:     ds.b 1
+help_close:  ds.b 1
 ctrl_down:   ds.b 1
 aes_init:    ds.b 1
         even

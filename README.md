@@ -1,8 +1,10 @@
 # ACE ST
 
 Jupiter Ace emulator for the Atari ST, written in 68000 assembly (vasm, Motorola syntax).
-Licence: GPL v2 or later. Derived in part from xAce (Edward Patel; keyboard matrix by
-Lawrence Woodman; Z80 semantics via xz81/xz80 by Russell Marks and Ian Collier).
+Licence: GPL v2 or later (see `LICENSE`). Derived in part from xAce (Edward Patel; keyboard
+matrix by Lawrence Woodman; Z80 semantics via xz81/xz80 by Russell Marks and Ian Collier).
+The keyboard picture shown by the Help key is from EightyOne by Michael D Wynne (GPL v2 or
+later, see `assets/README.md`).
 
 The Jupiter ACE is an 8-bit computer most notable for its use of Forth as a built-in
 language.
@@ -40,6 +42,7 @@ format is the same as .TAP) and plays.
 - `DJNZ $` delay loops (ROM interrupt routine, BEEP delay) finish in one step.
 - Tape loads mirror bytes below 0x4000 like the real 1K RAM/video chips.
 - **Control+O** opens the GEM file selector to pick the tape file (see Build and run).
+- **Help** shows the Jupiter Ace keyboard (EightyOne's picture); Help or Esc goes back.
 
 ## Testing
 
@@ -64,6 +67,7 @@ format is the same as .TAP) and plays.
   Control+O, type the name in the selector, load and start the game. `tapecancel.txt`: Control+O
   with an empty name keeps TAPE.ACE. TOS 1.04's selector has no Cancel key, so Cancel itself is
   untested here.
+- `test/scripts/help.txt`: Help at the prompt and in the game; keys typed meanwhile are ignored.
 - The rig's `type` sends punctuation (`. + : * - = ; , / "`) as Alt (= Symbol Shift) + key.
 
 ## Build and run
@@ -78,7 +82,8 @@ Put an 8192-byte `ACE.ROM` next to `ACE.PRG` (not distributed here). Tapes use `
 same directory, in xAce's block format (a .TAP works as is). **Control+O** opens the GEM file
 selector and makes the chosen file the tape for the next `LOAD`/`SAVE`; a name that does not
 exist yet becomes a new, empty tape. A write-protected tape is opened read-only. Control+O needs
-the AES, so it does nothing when ACE.PRG runs from the AUTO folder. **Undo** quits. Needs ST
+the AES, so it does nothing when ACE.PRG runs from the AUTO folder. **Help** shows the Ace
+keyboard and stops the Ace until Help or Esc is pressed. **Undo** quits. Needs ST
 high (640x400 mono).
 
 ## Layout
@@ -93,7 +98,8 @@ high (640x400 mono).
 | `src/z80core.s` `kb_scan` | Native ROM keyboard scan (`ED FE C9` at 0x0336) |
 | `src/z80core.s` `forth_next` | Native Forth checks + NEXT (`ED FF` at 0x04C8) |
 | `src/z80core.s` `ds_push` etc. | Native Forth data stack (`RST 10`, `RST 18`, `ED FB` at 0x084E) |
-| `src/main.s` | Startup, IKBD and Timer C handlers, data |
+| `src/main.s` | Startup, IKBD and Timer C handlers, Help keyboard picture, data |
+| `tools/kbpic.py` | Converts `assets/keyboardJupiterAce.bmp` (EightyOne) to `src/kbpic.bin` (1 bit, 512x223) |
 
 ## Design
 

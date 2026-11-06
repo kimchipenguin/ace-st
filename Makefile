@@ -9,7 +9,7 @@ TRACEN ?= 150000
 TRACESKIP ?= 0
 HATARI ?= hatari
 
-GEN = src/z80ops.s src/tables.s
+GEN = src/z80ops.s src/tables.s src/kbpic.bin
 SRCS = $(wildcard src/*.s)
 
 all: ACE.PRG
@@ -17,8 +17,11 @@ all: ACE.PRG
 trace: ACETRACE.PRG
 count: ACECOUNT.PRG
 
-$(GEN): tools/gen_z80.py
+src/z80ops.s src/tables.s: tools/gen_z80.py
 	python3 tools/gen_z80.py
+
+src/kbpic.bin: tools/kbpic.py assets/keyboardJupiterAce.bmp
+	python3 tools/kbpic.py assets/keyboardJupiterAce.bmp $@
 
 ACE.PRG: $(SRCS) $(GEN)
 	$(VASM) -Ftos -m68000 -Isrc -o $@ src/main.s
