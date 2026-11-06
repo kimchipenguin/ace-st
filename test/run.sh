@@ -3,6 +3,7 @@
 # Boots Hatari (ST, mono, TOS 1.04) with test/hd/<name> as drive C: and
 # autostarts ACE.PRG.  ACE.ROM comes from xAce/ace.rom, TAPE.ACE from
 # TAPE=<file> (default testgame/AceInvaders-056.tap).
+# EXTRA="<files>" copies more files to C:.
 # TOS=<img> picks another TOS image, APP=<prg> another binary (ACETRACE.PRG).
 # Script: one command per line:
 #   wait <secs> | shot | key <hex scancode> | down/up <scancode>
@@ -16,6 +17,7 @@ rm -rf $hd; mkdir -p $hd $out
 cp ${APP:-$P/ACE.PRG} $hd/ACE.PRG
 cp $P/xAce/ace.rom $hd/ACE.ROM
 cp ${TAPE:-$P/testgame/AceInvaders-056.tap} $hd/TAPE.ACE
+[[ -n $EXTRA ]] && cp $EXTRA $hd/   # more files, e.g. for the Control+O tape selector
 tos=${TOS:-$HOME/Documents/ST/TOS v1.04 (1989)(Atari Corp)(Mega ST)(DE)[Rainbow TOS].img}
 fifo=${TMPDIR:-/tmp}/acest-hatari-$name.fifo; rm -f $fifo
 home=$P/test/.hatari-home; mkdir -p $home

@@ -3,7 +3,8 @@
 ; same behaviour and file format as xAce:
 ;   block = 16-bit little-endian length (data+1), data, XOR checksum
 ; A header block (26 bytes, name at +1) is always followed by a data block.
-; Tape file: TAPE.ACE in the current directory.
+; Tape file: TAPE.ACE in the current directory, or the one picked with
+; Control+O (tape_select, GEM file selector).
 ; GPL v2 or later (derived from xAce tape.c, Edward Patel).
 ;
 ; TODO: .TAP/.TZX support, truncating on save, fall-back images when no tape.
@@ -41,17 +42,23 @@ tape_seek:
         lea     10(sp),sp
         rts
 
-; open (or create) the tape file once; d0.w = handle or negative
+; open the tape file once: read/write, else read-only, else create it when
+; it does not exist (never truncate an existing file); d0.w = handle or < 0
 tape_open:
         move.w  tape_fh,d0
         bpl.s   .have
-        move.w  #2,-(sp)                    ; read/write
+        moveq   #2,d3                       ; read/write, then read-only
+.try:   move.w  d3,-(sp)
         pea     tapename
         move.w  #$3d,-(sp)                  ; Fopen
         trap    #1
         addq.l  #8,sp
         tst.l   d0
         bpl.s   .got
+        subq.w  #2,d3
+        beq.s   .try
+        cmp.w   #-33,d0                     ; EFILNF: create it
+        bne.s   .have
         clr.w   -(sp)
         pea     tapename
         move.w  #$3c,-(sp)                  ; Fcreate
@@ -202,4 +209,124 @@ tape_save:
         moveq   #1,d1
         bsr     tape_write
 .out:   movem.l (sp)+,d3-d7/a0-a1/a3
+        rts
+
+; ---------------------------------------------------------------------------
+; Control+O: pick the tape file with the GEM file selector.  Called from
+; host_service (supervisor mode, all registers saved).  Hands keyboard and
+; mouse back to TOS, runs fsel_input in user mode, then takes them back and
+; forces a full redraw.  Without an AES (started from AUTO) it does nothing.
+; ---------------------------------------------------------------------------
+tape_select:
+        clr.b   open_flag
+        movem.l a3-a6,-(sp)
+        move.w  #$2700,sr
+        move.l  old_ikbd,$118.w
+        move.w  #$2000,sr
+        move.b  #$08,d0                     ; IKBD: mouse relative
+        jsr     ikbd_send
+        move.w  #$2700,sr                   ; user mode on this stack, the
+        movea.l sp,a0                       ; system stack for exceptions
+        move.l  a0,usp                      ; (GEMDOS Super moves sp here)
+        movea.l old_ssp,sp
+        move.w  #$0000,sr
+
+        move.w  #$c9,d0                     ; AES present?
+        trap    #2
+        cmp.w   #$c9,d0
+        beq     .back
+        tst.b   aes_init
+        bne.s   .inited
+        move.l  #$000a0000,aes_control      ; appl_init: 10,0,1,0,0
+        move.l  #$00010000,aes_control+4
+        bsr     aes_call
+        tst.w   aes_intout
+        bmi     .back
+        st      aes_init
+        move.w  #$19,-(sp)                  ; Dgetdrv
+        trap    #1
+        addq.l  #2,sp
+        lea     fs_path,a0
+        add.b   #'A',d0
+        move.b  d0,(a0)+
+        move.b  #':',(a0)+
+        clr.w   -(sp)                       ; Dgetpath(buf, current drive)
+        move.l  a0,-(sp)
+        move.w  #$47,-(sp)
+        trap    #1
+        addq.l  #8,sp
+        lea     fs_path,a0
+.end:   tst.b   (a0)+
+        bne.s   .end
+        subq.l  #1,a0
+        cmp.b   #$5c,-1(a0)                 ; root may come back as "\"
+        bne.s   .msk
+        subq.l  #1,a0
+.msk:   lea     fs_mask,a1
+.cpm:   move.b  (a1)+,(a0)+
+        bne.s   .cpm
+.inited:
+        dc.w    $a000                       ; Line-A: show the mouse
+        movea.l 8(a0),a1                    ; intin
+        clr.w   (a1)                        ; 0 = show whatever the count
+        dc.w    $a009
+        move.l  #$004e0001,aes_control      ; graf_mouse(ARROW): 78,1,1,0,0
+        move.l  #$00010000,aes_control+4
+        clr.w   aes_intin
+        bsr     aes_call
+        move.l  #$005a0000,aes_control      ; fsel_input(path, file): 90,0,2,2,0
+        move.l  #$00020002,aes_control+4
+        move.l  #fs_path,aes_addrin
+        move.l  #fs_file,aes_addrin+4
+        bsr     aes_call
+        dc.w    $a00a                       ; hide the mouse again
+        tst.w   aes_intout+2                ; OK?
+        beq.s   .back
+        tst.b   fs_file
+        beq.s   .back
+        lea     fs_path,a0                  ; tapename = path up to the
+        lea     tapename,a1                 ; last \ or :, then the file
+        movea.l a1,a2
+.cp:    move.b  (a0)+,d0
+        beq.s   .cpf
+        move.b  d0,(a1)+
+        cmp.b   #$5c,d0
+        beq.s   .sep
+        cmp.b   #':',d0
+        bne.s   .cp
+.sep:   movea.l a1,a2
+        bra.s   .cp
+.cpf:   lea     fs_file,a0
+.cpn:   move.b  (a0)+,(a2)+
+        bne.s   .cpn
+        bsr     tape_close                  ; next LOAD/SAVE opens the new file
+
+.back:  clr.l   -(sp)                       ; Super: supervisor again
+        move.w  #$20,-(sp)
+        trap    #1
+        addq.l  #6,sp
+        move.l  d0,old_ssp
+        move.b  #$12,d0                     ; IKBD: mouse off
+        jsr     ikbd_send
+        move.w  #$2700,sr
+        move.l  #ikbd_isr,$118.w
+        move.w  #$2000,sr
+        lea     keyrows,a0                  ; all Ace keys up
+        moveq   #-1,d0
+        move.l  d0,(a0)+
+        move.l  d0,(a0)
+        clr.b   ctrl_down
+        movea.l scr_ptr,a0                  ; black screen, full redraw
+        moveq   #-1,d1
+        move.w  #(32000/4)-1,d0
+.clr:   move.l  d1,(a0)+
+        dbra    d0,.clr
+        movem.l (sp)+,a3-a6
+        st      ST_REDRAW(a6)
+        rts
+
+aes_call:
+        move.l  #aes_pb,d1
+        move.w  #$c8,d0
+        trap    #2
         rts

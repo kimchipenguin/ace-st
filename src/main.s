@@ -4,7 +4,7 @@
 ;
 ; Build:  make   (vasm, Motorola syntax, -Ftos)
 ; Needs:  ACE.ROM (8192 bytes) in the current directory, ST high (mono).
-; Keys:   Undo quits.
+; Keys:   Undo quits, Control+O picks the tape file (GEM file selector).
 ; GPL v2 or later.
 ; ---------------------------------------------------------------------------
 
@@ -205,6 +205,12 @@ host_service:
         movem.l d0-d7/a0-a6,-(sp)
         tst.b   quit_flag
         bne     shutdown
+        tst.b   open_flag
+        beq.s   .no
+        jsr     tape_select                 ; Control+O
+        jsr     refresh_screen
+        movem.l (sp),d0-d7/a0-a6
+.no:
         addq.b  #1,svc_tick
         ifd     ICOUNT
         addq.l  #1,iframes
@@ -237,7 +243,7 @@ ikbd_isr:
         movem.l d0-d3/a0-a1,-(sp)
 .loop:  move.b  $fffffc00.w,d0
         btst    #0,d0                       ; receive data ready?
-        beq.s   .done
+        beq     .done
         moveq   #0,d1
         move.b  $fffffc02.w,d1
         tst.b   ikbd_skip
@@ -251,8 +257,23 @@ ikbd_isr:
         move.b  (a0,d1.w),ikbd_skip
         bra.s   .loop
 .key:   cmp.b   #$61,d1                     ; Undo make code = quit
-        bne.s   .map
+        bne.s   .ctl
         st      quit_flag
+.ctl:   move.b  d1,d0
+        and.b   #$7f,d0
+        cmp.b   #$1d,d0                     ; Control (no Ace key): track it
+        bne.s   .o
+        tst.b   d1
+        smi     d0
+        not.b   d0
+        move.b  d0,ctrl_down
+        bra     .loop
+.o:     cmp.b   #$18,d1                     ; Control+O make: tape selector
+        bne.s   .map
+        tst.b   ctrl_down
+        beq.s   .map
+        st      open_flag
+        bra     .loop
 .map:   moveq   #0,d2
         move.b  d1,d2
         and.w   #$7f,d2
@@ -291,7 +312,11 @@ skiptab:
         section data,data
 
 romname:  dc.b  "ACE.ROM",0
-tapename: dc.b  "TAPE.ACE",0
+tapename: dc.b  "TAPE.ACE",0                ; path of the tape file
+          dcb.b 160,0
+fs_mask:  dc.b  $5c,"*.*",0
+          even
+aes_pb:   dc.l  aes_control,aes_global,aes_intin,aes_intout,aes_addrin,aes_addrout
 msg_rez:  dc.b  "ACE-ST needs ST high resolution (mono).",13,10,0
 msg_rom:  dc.b  "Cannot read ACE.ROM (8192 bytes).",13,10,0
 badmsg:   dc.b  "Unimplemented Z80 opcode, PC="
@@ -327,6 +352,18 @@ tape_hdr_done: ds.b 1
 tc_div:      ds.b 1
 svc_tick:    ds.b 1
 quit_flag:   ds.b 1
+open_flag:   ds.b 1
+ctrl_down:   ds.b 1
+aes_init:    ds.b 1
+        even
+aes_control: ds.w 6
+aes_global:  ds.w 16
+aes_intin:   ds.w 4
+aes_intout:  ds.w 4
+aes_addrin:  ds.l 2
+aes_addrout: ds.l 2
+fs_path:     ds.b 160                       ; file selector path + mask
+fs_file:     ds.b 16                        ; and file name
 ikbd_skip:   ds.b 1
         even
 icount:      ds.l 1                         ; ICOUNT build: instructions

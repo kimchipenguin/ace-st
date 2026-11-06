@@ -1,0 +1,23 @@
+# Control+O, clear the name (Esc), OK (Return): no file picked, TAPE.ACE stays
+# the tape (TOS 1.04's selector has no Cancel key)
+wait 15
+down 0x1d
+key 0x18
+up 0x1d
+wait 3
+key 0x01
+key 0x1c
+wait 3
+type load graphics_
+wait 5
+type gr_
+wait 6
+type forget gr_
+wait 3
+type load run_
+wait 5
+type run_
+wait 8
+key 0x1c
+wait 10
+shot

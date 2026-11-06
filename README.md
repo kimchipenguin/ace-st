@@ -19,9 +19,9 @@ format is the same as .TAP) and plays.
   and in-game windows (150k instructions after 1.09M and 3M, with tape loading, typed keys and
   key chords before them) match register for register; registers also match at every
   interrupt before the window. Memory matches except undocumented bits of pushed flags.
-- **Speed: about 37% of a real Ace** on an 8 MHz ST, in Ace Invaders (about 530 ACE-ST steps per
+- **Speed: about 41% of a real Ace** on an 8 MHz ST, in Ace Invaders (about 600 ACE-ST steps per
   frame, ~45 Z80 T-states each). Steps: ROM code ~15%, native keyboard scan ~19-21%, native
-  Forth NEXT ~30%, native data stack ~37%. Far from the 70-80% target.
+  Forth NEXT ~30%, native data stack ~37%, inline 1K RAM writes ~41%. Far from the 70-80% target.
 - **Native keyboard scan:** `ED FE C9` at 0x0336 replaces the ROM routine (85 Z80 instructions,
   640 T-states per call; the game calls it about 3.7 times per frame) with 68000 code that
   returns the same registers and flags. `-DNOKBSCAN` keeps the ROM routine, for comparisons.
@@ -33,10 +33,13 @@ format is the same as .TAP) and plays.
 - **Native data stack:** the ROM's Forth data stack routines (pointer at 0x3C3B) run as one step:
   `RST 10` (push DE, 9 Z80 instructions) and `RST 18` (pop DE) are native opcode handlers, as
   0x0010/0x0018 are ROM; `ED FB` at 0x084E pops BC (7). Same registers, memory and stack bytes.
-- **Profile now** (`test/pcprof.py`): `store_low` (writes below 0x4000, 1K RAM mirrored four
-  times) 20%, `forth_next` 15%, NEXT dispatch 13%, `refresh_screen` 10%, data stack 14%.
+- **1K RAM writes:** the STORE macro writes 0x3000-0x3FFF (Forth data stack, system variables)
+  and its three mirrors inline; ROM, video and character RAM still go through `store_low`.
+- **Profile now** (`test/pcprof.py`): `ds_push` 19%, `forth_next` 16%, NEXT dispatch 15%,
+  `refresh_screen` 10%, `ds_pop` 9%.
 - `DJNZ $` delay loops (ROM interrupt routine, BEEP delay) finish in one step.
 - Tape loads mirror bytes below 0x4000 like the real 1K RAM/video chips.
+- **Control+O** opens the GEM file selector to pick the tape file (see Build and run).
 
 ## Testing
 
@@ -47,7 +50,7 @@ format is the same as .TAP) and plays.
   The trace build also logs port reads (TRACEIN.BIN) and Z80 memory (TRACEMEM.BIN).
 - `make count`: ACECOUNT.PRG keeps instruction and 50 Hz frame counters for speed checks;
   `test/scripts/gcount.txt` reads them in the game (address from Hatari's `info basepage`:
-  BSS start + offset of `icount` in a vasm `-L` listing; $2E142 under TOS 1.04 right now).
+  BSS start + offset of `icount` in a vasm `-L` listing; $3054E under TOS 1.04 right now).
 - The oracle has its own tape loader with ACE-ST's rules: xAce's `tape_skip_block` seeks
   backwards at the end of the tape. Debug aids: `WATCH=addr`, `KBLOG=record`, `TAPELOG=1`.
   It runs the ROM code behind both native traps as one step and prints their counts.
@@ -57,6 +60,10 @@ format is the same as .TAP) and plays.
   `test/pcprof.py <vasm -L listing> test/shots/samp.log` maps them to handlers (Hatari's own
   profiler sees nothing when driven through the command pipe). `delay <secs>` in a script
   changes the pause after each command.
+- `test/scripts/tapesel.txt` (run with `TAPE=/dev/null EXTRA=<copy of the game named INVADERS>`):
+  Control+O, type the name in the selector, load and start the game. `tapecancel.txt`: Control+O
+  with an empty name keeps TAPE.ACE. TOS 1.04's selector has no Cancel key, so Cancel itself is
+  untested here.
 - The rig's `type` sends punctuation (`. + : * - = ; , / "`) as Alt (= Symbol Shift) + key.
 
 ## Build and run
@@ -68,7 +75,11 @@ make run                             # Hatari, ST high (mono)
 ```
 
 Put an 8192-byte `ACE.ROM` next to `ACE.PRG` (not distributed here). Tapes use `TAPE.ACE` in the
-same directory, in xAce's block format. **Undo** quits. Needs ST high (640x400 mono).
+same directory, in xAce's block format (a .TAP works as is). **Control+O** opens the GEM file
+selector and makes the chosen file the tape for the next `LOAD`/`SAVE`; a name that does not
+exist yet becomes a new, empty tape. A write-protected tape is opened read-only. Control+O needs
+the AES, so it does nothing when ACE.PRG runs from the AUTO folder. **Undo** quits. Needs ST
+high (640x400 mono).
 
 ## Layout
 
@@ -78,7 +89,7 @@ same directory, in xAce's block format. **Undo** quits. Needs ST high (640x400 m
 | `src/macros.s` | Register allocation, dispatch, flag and operand macros |
 | `src/z80core.s` | Store/mirroring, port I/O, 50 Hz interrupt delivery, support routines |
 | `src/video.s` | 2x scaled mono blit from video and character RAM |
-| `src/tape.s` | ROM-trap tape load/save via GEMDOS (`ED FC C9` at 0x18A7, `ED FD C9` at 0x1820) |
+| `src/tape.s` | ROM-trap tape load/save via GEMDOS (`ED FC C9` at 0x18A7, `ED FD C9` at 0x1820), Control+O file selector |
 | `src/z80core.s` `kb_scan` | Native ROM keyboard scan (`ED FE C9` at 0x0336) |
 | `src/z80core.s` `forth_next` | Native Forth checks + NEXT (`ED FF` at 0x04C8) |
 | `src/z80core.s` `ds_push` etc. | Native Forth data stack (`RST 10`, `RST 18`, `ED FB` at 0x084E) |
@@ -98,6 +109,6 @@ same directory, in xAce's block format. **Undo** quits. Needs ST high (640x400 m
 - H and N flags are not tracked, so `DAA` stops with an "unimplemented opcode" message.
   Also missing: `SLL`, `RLD`/`RRD`, block I/O, undocumented IXH/IXL, IM 2, R register.
 - No sound: port 0xFE accesses are ignored.
-- Mono ST only. A .TAP works when renamed TAPE.ACE; no .TZX, no file selector, no tape truncation
-  on save, no fallback when `TAPE.ACE` is missing.
+- Mono ST only. No .TZX, no tape truncation on save. `LOAD` from an empty tape prints `Bytes:`
+  over and over instead of waiting.
 - Punctuation keys map by physical position to Symbol Shift combinations.
