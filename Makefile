@@ -27,7 +27,7 @@ ACE.PRG: $(SRCS) $(GEN)
 	$(VASM) -Ftos -m68000 -Isrc -o $@ src/main.s
 
 ACETRACE.PRG: $(SRCS) $(GEN) FORCE
-	$(VASM) -Ftos -m68000 -Isrc -DTRACE=$(TRACEN) -DTRACESKIP=$(TRACESKIP) -o $@ src/main.s
+	$(VASM) -Ftos -m68000 -Isrc -DTRACE=$(TRACEN) -DTRACESKIP=$(TRACESKIP) $(TRACEFLAGS) -o $@ src/main.s
 
 ACECOUNT.PRG: $(SRCS) $(GEN)
 	$(VASM) -Ftos -m68000 -Isrc -DICOUNT=1 -o $@ src/main.s

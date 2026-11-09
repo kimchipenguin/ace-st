@@ -21,10 +21,11 @@ format is the same as .TAP) and plays.
   and in-game windows (150k instructions after 1.09M and 3M, with tape loading, typed keys and
   key chords before them) match register for register; registers also match at every
   interrupt before the window. Memory matches except undocumented bits of pushed flags.
-- **Speed: about 48% of a real Ace** on an 8 MHz ST, in Ace Invaders (about 700 ACE-ST steps per
+- **Speed: about 50% of a real Ace** on an 8 MHz ST, in Ace Invaders (about 733 ACE-ST steps per
   frame, ~45 Z80 T-states each). Steps: ROM code ~15%, native keyboard scan ~19-21%, native
   Forth NEXT ~30%, native data stack ~37%, inline 1K RAM writes ~41%, leaner data stack ~45%,
-  screen refresh only when video RAM changed, four cells per compare ~48%.
+  screen refresh only when video RAM changed, four cells per compare ~48%, leaner Forth
+  NEXT ~50%.
   Far from the 70-80% target.
 - **Native keyboard scan:** `ED FE C9` at 0x0336 replaces the ROM routine (85 Z80 instructions,
   640 T-states per call; the game calls it about 3.7 times per frame) with 68000 code that
@@ -33,7 +34,9 @@ format is the same as .TAP) and plays.
   data stack and free memory, tests BREAK (Shift+Space) and falls into NEXT at 0x04B9: about 36
   Z80 instructions (360 T-states). `ED FF` at 0x04C8 does all of it in one step and leaves the
   same registers, flags and stack bytes. When a check fails it runs only `LD BC,11` and goes on
-  in the ROM, which then reports ERROR 1/2/3 itself. `-DNOFNEXT` keeps the ROM code.
+  in the ROM, which then reports ERROR 1/2/3 itself. `-DNOFNEXT` keeps the ROM code. The usual
+  case (dictionary pointer below 0xFFF5, even Z80 SP) uses word compares and word stack
+  accesses; the other cases keep exact byte code.
 - **Native data stack:** the ROM's Forth data stack routines (pointer at 0x3C3B) run as one step:
   `RST 10` (push DE, 9 Z80 instructions) and `RST 18` (pop DE) are native opcode handlers, as
   0x0010/0x0018 are ROM; `ED FB` at 0x084E pops BC (7). Same registers, memory and stack bytes.
@@ -45,8 +48,8 @@ format is the same as .TAP) and plays.
 - **Screen refresh** (12.5 Hz): skipped unless video RAM (or character RAM, which redraws
   everything) was written since the last one; compares four cells at a time with a shadow copy
   and draws only the groups that differ.
-- **Profile now** (`test/pcprof.py`): `forth_next` 22%, NEXT dispatch 17%, `ds_push` 11%,
-  `ds_pop` 9%, `refresh_screen` 4%. Ace Invaders keeps its data stack in the 1K RAM, so most
+- **Profile now** (`test/pcprof.py`): NEXT dispatch 18%, `forth_next` 17%, `ds_push` 15%,
+  `ds_pop` 9%, `refresh_screen` 3%. Ace Invaders keeps its data stack in the 1K RAM, so most
   of `ds_push` is the mirror copies.
 - `DJNZ $` delay loops (ROM interrupt routine, BEEP delay) finish in one step.
 - Tape loads mirror bytes below 0x4000 like the real 1K RAM/video chips.
@@ -60,9 +63,11 @@ format is the same as .TAP) and plays.
 - `make trace TRACESKIP=n TRACEN=m`, run ACETRACE.PRG with `--memsize 4`, then
   `test/oracle/oracle xAce/ace.rom test/hd/<name>/TRACE.BIN n test/hd/<name>/TRACEINT.BIN`.
   The trace build also logs port reads (TRACEIN.BIN) and Z80 memory (TRACEMEM.BIN).
+  `TRACEFLAGS=-DFNTEST_ODD=1` / `-DFNTEST_WRAP=1` force `forth_next` through its rare odd-SP /
+  dictionary-wrap code, so a normal trace checks those paths too.
 - `make count`: ACECOUNT.PRG keeps instruction and 50 Hz frame counters for speed checks;
   `test/scripts/gcount.txt` reads them in the game (address from Hatari's `info basepage`:
-  BSS start + offset of `icount` in a vasm `-L` listing; $34196 under TOS 1.04 right now).
+  BSS start + offset of `icount` in a vasm `-L` listing; $341C8 under TOS 1.04 right now).
 - The oracle has its own tape loader with ACE-ST's rules: xAce's `tape_skip_block` seeks
   backwards at the end of the tape. Debug aids: `WATCH=addr`, `KBLOG=record`, `TAPELOG=1`.
   It runs the ROM code behind both native traps as one step and prints their counts.

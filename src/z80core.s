@@ -194,29 +194,26 @@ kb_scan:
 ; reports the error.  Registers, S Z PV C flags and the bytes the calls
 ; leave below SP end up as after the ROM code.
 forth_next:
-        moveq   #0,d1                       ; HL = [3C37] + 11
-        move.b  $3c38(a5),d1
-        lsl.w   #8,d1
+        move.b  $3c38(a5),-(sp)             ; d1.w = [3C37] (byte pushed on
+        move.w  (sp)+,d1                    ; a7 lands in the high half)
         move.b  $3c37(a5),d1
-        add.l   #11,d1
-        moveq   #0,d2                       ; DE = [3C3B]
-        move.b  $3c3c(a5),d2
-        lsl.w   #8,d2
+        move.b  $3c3c(a5),-(sp)             ; d2.w = [3C3B]
+        move.w  (sp)+,d2
         move.b  $3c3b(a5),d2
-        move.l  d1,d0                       ; SBC HL,DE with the ADD's carry
-        clr.w   d0
-        swap    d0
-        and.l   #$ffff,d1
-        sub.l   d2,d1
-        sub.l   d0,d1
-        bpl     .slow                       ; no borrow: error 2
-        move.l  d2,d1                       ; HL = 1E + [3C3B]
-        add.l   #$1e,d1
-        cmp.l   #$10000,d1
-        bcc     .slow                       ; carry: error 1
-        SP2W    d0
-        subq.w  #2,d0                       ; SP inside the CALL
-        sub.w   d0,d1                       ; SBC HL,SP
+        cmp.w   #$fff5,d1                   ; ADD HL,11 carries: exact code
+        bcc     .wrap
+        ifd     FNTEST_WRAP                 ; test: always the exact code
+        bra     .wrap
+        endif
+        add.w   #11,d1                      ; no carry: SBC borrows when
+        cmp.w   d2,d1                       ; [3C37]+11 < [3C3B]
+        bcc     .slow                       ; no borrow: error 2
+.chk2:  add.w   #$1e,d2                     ; HL = 1E + [3C3B]
+        bcs     .slow                       ; carry: error 1
+        move.l  a1,d0                       ; SP inside the CALL
+        sub.l   a5,d0
+        subq.w  #2,d0
+        sub.w   d0,d2                       ; SBC HL,SP
         bcc     .slow
         move    sr,d4                       ; S = N, PV = V
         and.w   #$0a,d4
@@ -237,28 +234,62 @@ forth_next:
 .rra:   move.b  d2,d7
         or.w    #$11,d4                     ; C = 1 from RRA
         move.w  d4,d3
-        move.b  #$04,-1(a1)                 ; left by CALL 04E4 / PUSH BC
-        move.b  #$e2,-2(a1)
-        clr.b   -3(a1)
-        clr.b   -4(a1)
-        moveq   #0,d1                       ; IP from the stack
-        move.b  1(a1),d1
-        lsl.w   #8,d1
-        move.b  (a1),d1
-        RDW     d6                          ; W = (IP)
+        move.w  a1,d0                       ; a5 is even: host parity =
+        btst    #0,d0                       ; Z80 SP parity
+        bne.s   .odd
+        ifd     FNTEST_ODD                  ; test: always the byte code
+        bra.s   .odd
+        endif
+        move.l  #$0000e204,-4(a1)           ; left by CALL 04E4 / PUSH BC
+        moveq   #0,d1                       ; IP from the stack (a word,
+        move.w  (a1),d1                     ; byte-swapped)
+        rol.w   #8,d1
+        moveq   #0,d6                       ; W = (IP)
+        move.b  1(a5,d1.l),-(sp)
+        move.w  (sp)+,d6
+        move.b  (a5,d1.l),d6
         addq.w  #2,d1                       ; IP+2 back on the stack
-        move.b  d1,(a1)
-        move.w  d1,d0
-        lsr.w   #8,d0
-        move.b  d0,1(a1)
-        move.l  d6,d1
-        RDW     d6                          ; HL = (W)
-        addq.w  #2,d1
-        move.l  d1,d5                       ; DE = W+2
+        rol.w   #8,d1
+        move.w  d1,(a1)
+.hl:    moveq   #0,d5                       ; HL = (W), DE = W+2
+        move.w  d6,d5
+        move.b  1(a5,d5.l),-(sp)
+        move.w  (sp)+,d6
+        move.b  (a5,d5.l),d6
+        addq.w  #2,d5
         moveq   #0,d4                       ; BC = 0
         lea     (a5,d6.l),a0
         CHKINT
         NEXT
+.odd:   move.b  #$04,-1(a1)                 ; odd SP: byte by byte
+        move.b  #$e2,-2(a1)
+        clr.b   -3(a1)
+        clr.b   -4(a1)
+        moveq   #0,d1
+        move.b  1(a1),d1
+        lsl.w   #8,d1
+        move.b  (a1),d1
+        RDW     d6                          ; W = (IP)
+        addq.w  #2,d1
+        move.b  d1,(a1)
+        move.w  d1,d0
+        lsr.w   #8,d0
+        move.b  d0,1(a1)
+        bra.s   .hl
+.wrap:  moveq   #0,d0                       ; [3C37] >= FFF5: SBC HL,DE with
+        move.w  d1,d0                       ; the ADD's carry, as the ROM
+        add.l   #11,d0
+        moveq   #0,d1
+        move.w  d2,d1
+        swap    d0                          ; d0.w = carry, high = HL
+        moveq   #0,d4
+        move.w  d0,d4
+        clr.w   d0
+        swap    d0
+        sub.l   d1,d0
+        sub.l   d4,d0
+        bpl.s   .slow                       ; no borrow: error 2
+        bra     .chk2
 .slow:  moveq   #11,d4                      ; LD BC,11, on at 04CB
         addq.l  #1,a0
         NEXT

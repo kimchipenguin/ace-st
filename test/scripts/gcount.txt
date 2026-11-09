@@ -12,9 +12,9 @@ wait 8
 key 0x1c
 wait 5
 shot
-dbg m $34196 8
+dbg m $341c8 8
 wait 10
-dbg m $34196 8
+dbg m $341c8 8
 wait 10
-dbg m $34196 8
+dbg m $341c8 8
 shot
