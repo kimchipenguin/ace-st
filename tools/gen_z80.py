@@ -149,7 +149,7 @@ def gen_main():
     handler('o', 0x10, [
         'cmp.b #$fe,(a0)', 'bne.s .n', 'and.w #$00ff,d4', 'addq.l #1,a0',
         'NEXT', '.n:',
-        'sub.w #$0100,d4', 'move.w d4,d0', 'lsr.w #8,d0', 'beq.s .s'] +
+        'sub.w #$0100,d4', 'cmp.w #$0100,d4', 'bcs.s .s'] +
         JR_TAKE + ['NEXT', '.s:', 'addq.l #1,a0'])
     jr(0x18, None)
     for cc in range(4):
@@ -223,8 +223,8 @@ def gen_main():
         'move.w d6,d0', 'move.w ST_HL2(a6),d6', 'move.w d0,ST_HL2(a6)'])
     handler('o', 0xEB, ['exg d5,d6'])
     handler('o', 0xE3, [
-        'moveq #0,d0', 'move.b 1(a1),d0', 'lsl.w #8,d0', 'move.b (a1),d0',
-        'move.b d6,(a1)', 'move.w d6,d1', 'lsr.w #8,d1', 'move.b d1,1(a1)',
+        'move.b 1(a1),-(sp)', 'move.w (sp)+,d0', 'move.b (a1),d0',
+        'move.b d6,(a1)', 'move.w d6,-(sp)', 'move.b (sp)+,1(a1)',
         'move.w d0,d6'])
     handler('o', 0xE9, ['lea (a5,d6.l),a0'])
     handler('o', 0xF9, ['SETSP d6'])
@@ -405,13 +405,21 @@ def gen_index(tab, f):
                 ['CFLAG', 'move.w d2,%s(a6)' % f])
     handler(tab, 0xE5, ['move.w %s(a6),d2' % f, 'PUSH16 d2,d0'])
     handler(tab, 0xE1, ['POP16 d2', 'move.w d2,%s(a6)' % f])
-    handler(tab, 0xE9, ['moveq #0,d0', 'move.w %s(a6),d0' % f,
-                        'lea (a5,d0.l),a0'])
+    jp = ['moveq #0,d0', 'move.w %s(a6),d0' % f, 'lea (a5,d0.l),a0']
+    if tab == 'fd':
+        # JP (IY) with IY = 04C8 (every Forth primitive): run the ED FF there
+        # (forth_next) at once.  Trace and count builds still record the
+        # ED FF step, so traces and step counts stay the same.
+        jp += ['ifnd NOFNEXT', 'cmp.w #$04c8,d0', 'bne.s .n',
+               'ifd TRACE', 'jsr trace_rec', 'endif',
+               'ifd ICOUNT', 'addq.l #1,icount', 'endif',
+               'addq.l #2,a0', 'jmp forth_next', '.n:', 'endif']
+    handler(tab, 0xE9, jp)
     handler(tab, 0xF9, ['moveq #0,d0', 'move.w %s(a6),d0' % f, 'SETSP d0'])
     handler(tab, 0xE3, [
-        'moveq #0,d0', 'move.b 1(a1),d0', 'lsl.w #8,d0', 'move.b (a1),d0',
-        'move.w %s(a6),d1' % f, 'move.b d1,(a1)', 'lsr.w #8,d1',
-        'move.b d1,1(a1)', 'move.w d0,%s(a6)' % f])
+        'move.b 1(a1),-(sp)', 'move.w (sp)+,d0', 'move.b (a1),d0',
+        'move.w %s(a6),d1' % f, 'move.b d1,(a1)', 'move.w d1,-(sp)',
+        'move.b (sp)+,1(a1)', 'move.w d0,%s(a6)' % f])
 
     ix = 'IXADDR %s' % f
     handler(tab, 0x34, [ix, 'move.b (a5,d1.l),d2', 'addq.b #1,d2',

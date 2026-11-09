@@ -114,57 +114,68 @@ STORE   macro
 .dn\@:
         endm
 
+; Byte moves between the high half of a word and a byte use the 68000
+; stack: a byte pushed on a7 takes a whole word with the byte in the high
+; half, and a word pushed there is read back high byte first.  This is
+; 8-14 cycles faster than shifting by 8 (22 cycles).
+
 ; d1 = address, d2.w = value (little endian).  Clobbers d0,d1,d2,a2.
 STOREW  macro
         STORE
         addq.w  #1,d1
-        lsr.w   #8,d2
+        move.w  d2,-(sp)                    ; d2.b = high byte
+        move.b  (sp)+,d2
         STORE
         endm
 
 ; read word at (d1) into \1 (upper word cleared)
 RDW     macro
         moveq   #0,\1
-        move.b  1(a5,d1.l),\1
-        lsl.w   #8,\1
+        move.b  1(a5,d1.l),-(sp)
+        move.w  (sp)+,\1
         move.b  (a5,d1.l),\1
         endm
 
-; 16-bit immediate from the instruction stream into \1 (upper word cleared)
+; 16-bit immediate from the instruction stream into \1 (upper word
+; cleared; clobbers d0 unless \1 is d0)
 RDIMM16 macro
         moveq   #0,\1
-        move.b  1(a0),\1
-        lsl.w   #8,\1
+        ifc     "\1","d0"
+        move.b  1(a0),-(sp)
+        move.w  (sp)+,\1
         move.b  (a0),\1
         addq.l  #2,a0
+        else
+        move.b  (a0)+,d0
+        move.b  (a0)+,-(sp)
+        move.w  (sp)+,\1
+        move.b  d0,\1
+        endc
         endm
 
-; push word \1 using \2 as temp
+; push word \1 (\2 is not used any more)
 PUSH16  macro
-        move.w  \1,\2
-        lsr.w   #8,\2
-        move.b  \2,-(a1)
+        move.w  \1,-(sp)
+        move.b  (sp)+,-(a1)
         move.b  \1,-(a1)
         endm
 
-; pop a word into register pair \1 (d4/d5/d6)
+; pop a word into \1 (d2, or d4/d5/d6 whose upper word stays zero);
+; clobbers d0
 POP16   macro
-        moveq   #0,\1
-        move.b  (a1)+,\1
-        moveq   #0,d0
         move.b  (a1)+,d0
-        lsl.w   #8,d0
-        or.w    d0,\1
+        move.b  (a1)+,-(sp)
+        move.w  (sp)+,\1
+        move.b  d0,\1
         endm
 
 ; RET: pop PC (clobbers d0,d1)
 DORET   macro
         moveq   #0,d0
-        move.b  (a1)+,d0
-        moveq   #0,d1
         move.b  (a1)+,d1
-        lsl.w   #8,d1
-        or.w    d1,d0
+        move.b  (a1)+,-(sp)
+        move.w  (sp)+,d0
+        move.b  d1,d0
         lea     (a5,d0.l),a0
         CHKINT
         endm
@@ -206,13 +217,12 @@ PAR     macro
         or.b    (a2,d0.w),d3
         endm
 
-; load X (and a preset Z) from the Z80 carry before ADDX/SUBX/ROXL/ROXR
+; load X (and a preset Z) from the Z80 carry before ADDX/SUBX/ROXL/ROXR:
+; shifting the carry bit out leaves X = C = carry and a zero result (Z = 1)
 SETX    macro
-        move.w  d3,d0
-        and.w   #1,d0
-        lsl.b   #4,d0
-        or.b    #4,d0
-        move.w  d0,ccr
+        moveq   #1,d0
+        and.b   d3,d0
+        lsr.b   #1,d0
         endm
 
 ; INC/DEC r: take N,Z,V from the CCR, keep the old carry
@@ -257,23 +267,23 @@ LDAIR   macro
 ; ---------------------------------------------------------------------------
 ; 8-bit operand access: value always travels in d2.b
 ; ---------------------------------------------------------------------------
-GET_B   macro
-        move.w  d4,d2
-        lsr.w   #8,d2
+GET_B   macro                               ; d2.b only, upper bits junk
+        move.w  d4,-(sp)
+        move.b  (sp)+,d2
         endm
 GET_C   macro
         move.b  d4,d2
         endm
-GET_D   macro
-        move.w  d5,d2
-        lsr.w   #8,d2
+GET_D   macro                               ; d2.b only, upper bits junk
+        move.w  d5,-(sp)
+        move.b  (sp)+,d2
         endm
 GET_E   macro
         move.b  d5,d2
         endm
-GET_H   macro
-        move.w  d6,d2
-        lsr.w   #8,d2
+GET_H   macro                               ; d2.b only, upper bits junk
+        move.w  d6,-(sp)
+        move.b  (sp)+,d2
         endm
 GET_L   macro
         move.b  d6,d2
@@ -286,25 +296,25 @@ GET_A   macro
         endm
 
 PUT_B   macro
-        ror.w   #8,d4
-        move.b  d2,d4
-        rol.w   #8,d4
+        move.w  d4,-(sp)
+        move.b  d2,(sp)                     ; high byte of the word
+        move.w  (sp)+,d4
         endm
 PUT_C   macro
         move.b  d2,d4
         endm
 PUT_D   macro
-        ror.w   #8,d5
-        move.b  d2,d5
-        rol.w   #8,d5
+        move.w  d5,-(sp)
+        move.b  d2,(sp)                     ; high byte of the word
+        move.w  (sp)+,d5
         endm
 PUT_E   macro
         move.b  d2,d5
         endm
 PUT_H   macro
-        ror.w   #8,d6
-        move.b  d2,d6
-        rol.w   #8,d6
+        move.w  d6,-(sp)
+        move.b  d2,(sp)                     ; high byte of the word
+        move.w  (sp)+,d6
         endm
 PUT_L   macro
         move.b  d2,d6

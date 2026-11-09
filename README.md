@@ -22,11 +22,12 @@ format is the same as .TAP) and plays.
   and in-game windows (150k instructions after 1.09M and 3M, with tape loading, typed keys and
   key chords before them) match register for register; registers also match at every
   interrupt before the window. Memory matches except undocumented bits of pushed flags.
-- **Speed: about 52% of a real Ace** on an 8 MHz ST, in Ace Invaders (about 761 ACE-ST steps per
+- **Speed: about 56% of a real Ace** on an 8 MHz ST, in Ace Invaders (about 819 ACE-ST steps per
   frame, ~45 Z80 T-states each). Steps: ROM code ~15%, native keyboard scan ~19-21%, native
   Forth NEXT ~30%, native data stack ~37%, inline 1K RAM writes ~41%, leaner data stack ~45%,
   screen refresh only when video RAM changed, four cells per compare ~48%, leaner Forth
-  NEXT ~50%, handler slots instead of a dispatch table ~52%.
+  NEXT ~50%, handler slots instead of a dispatch table ~52%, byte moves through the stack
+  instead of 8-bit shifts and `JP (IY)` straight into `forth_next` ~56%.
   Far from the 70-80% target.
 - **Native keyboard scan:** `ED FE C9` at 0x0336 replaces the ROM routine (85 Z80 instructions,
   640 T-states per call; the game calls it about 3.7 times per frame) with 68000 code that
@@ -53,8 +54,15 @@ format is the same as .TAP) and plays.
   (256-byte slots, 64K of code). NEXT reads the opcode into the high byte of `d0` and jumps
   through `a4`: 38 cycles, no table load (was 44). Handlers larger than a slot would go out of
   line (`OVERSIZE` in `tools/gen_z80.py`; none now). ACE.PRG grows to about 134 KB.
-- **Profile now** (`test/pcprof.py`, 800 samples): NEXT dispatch 22%, `forth_next` 19%,
-  `ds_push` 16%, `ds_pop` 9%, `refresh_screen` 4%. Ace Invaders keeps its data stack in the 1K RAM, so most
+- **Byte moves:** the high byte of BC/DE/HL and 16-bit stack and immediate values go through
+  the 68000 stack (a byte pushed on a7 lands in the high half of a word) instead of 8-bit
+  shifts, which cost 22 cycles each: `PUT_H` 48 -> 24 cycles, `GET_H` 26 -> 16, `POP16`
+  50 -> 32, `PUSH16` 42 -> 28. `SETX` (carry into X before `ADC`/`SBC`/`RL`/`RR`) is now
+  `moveq`/`and`/`lsr`, 16 cycles instead of about 42.
+- `JP (IY)` with IY = 0x04C8 (the end of every Forth primitive) runs `forth_next` at once
+  instead of dispatching the `ED FF` there; trace and count builds still record that step.
+- **Profile now** (`test/pcprof.py`, 800 samples): `forth_next` 22%, NEXT dispatch 20%,
+  `ds_push` 14%, `ds_pop` 9%, `refresh_screen` 3%. Ace Invaders keeps its data stack in the 1K RAM, so most
   of `ds_push` is the mirror copies.
 - `DJNZ $` delay loops (ROM interrupt routine, BEEP delay) finish in one step.
 - Tape loads mirror bytes below 0x4000 like the real 1K RAM/video chips.
@@ -73,7 +81,7 @@ format is the same as .TAP) and plays.
   dictionary-wrap code, so a normal trace checks those paths too.
 - `make count`: ACECOUNT.PRG keeps instruction and 50 Hz frame counters for speed checks;
   `test/scripts/gcount.txt` reads them in the game (address from Hatari's `info basepage`:
-  BSS start + offset of `icount` in a vasm `-L` listing; $43100 under TOS 1.04 right now).
+  BSS start + offset of `icount` in a vasm `-L` listing; $42F84 under TOS 1.04 right now).
 - The oracle has its own tape loader with ACE-ST's rules: xAce's `tape_skip_block` seeks
   backwards at the end of the tape. Debug aids: `WATCH=addr`, `KBLOG=record`, `TAPELOG=1`.
   It runs the ROM code behind both native traps as one step and prints their counts.

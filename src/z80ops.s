@@ -583,14 +583,12 @@ o_e2:
         NEXT
         dcb.b   slot_base+25344-*,0
 o_e3:
-        moveq #0,d0
-        move.b 1(a1),d0
-        lsl.w #8,d0
+        move.b 1(a1),-(sp)
+        move.w (sp)+,d0
         move.b (a1),d0
         move.b d6,(a1)
-        move.w d6,d1
-        lsr.w #8,d1
-        move.b d1,1(a1)
+        move.w d6,-(sp)
+        move.b (sp)+,1(a1)
         move.w d0,d6
         NEXT
         dcb.b   slot_base+25600-*,0
@@ -895,9 +893,8 @@ o_10:
         NEXT
 .n:
         sub.w #$0100,d4
-        move.w d4,d0
-        lsr.w #8,d0
-        beq.s .s
+        cmp.w #$0100,d4
+        bcs.s .s
         move.b (a0)+,d0
         ext.w d0
         adda.w d0,a0
@@ -4055,14 +4052,13 @@ dd_f9:
         NEXT
 
 dd_e3:
-        moveq #0,d0
-        move.b 1(a1),d0
-        lsl.w #8,d0
+        move.b 1(a1),-(sp)
+        move.w (sp)+,d0
         move.b (a1),d0
         move.w ST_IX(a6),d1
         move.b d1,(a1)
-        lsr.w #8,d1
-        move.b d1,1(a1)
+        move.w d1,-(sp)
+        move.b (sp)+,1(a1)
         move.w d0,ST_IX(a6)
         NEXT
 
@@ -4292,6 +4288,19 @@ fd_e9:
         moveq #0,d0
         move.w ST_IY(a6),d0
         lea (a5,d0.l),a0
+        ifnd NOFNEXT
+        cmp.w #$04c8,d0
+        bne.s .n
+        ifd TRACE
+        jsr trace_rec
+        endif
+        ifd ICOUNT
+        addq.l #1,icount
+        endif
+        addq.l #2,a0
+        jmp forth_next
+.n:
+        endif
         NEXT
 
 fd_f9:
@@ -4301,14 +4310,13 @@ fd_f9:
         NEXT
 
 fd_e3:
-        moveq #0,d0
-        move.b 1(a1),d0
-        lsl.w #8,d0
+        move.b 1(a1),-(sp)
+        move.w (sp)+,d0
         move.b (a1),d0
         move.w ST_IY(a6),d1
         move.b d1,(a1)
-        lsr.w #8,d1
-        move.b d1,1(a1)
+        move.w d1,-(sp)
+        move.b (sp)+,1(a1)
         move.w d0,ST_IY(a6)
         NEXT
 
