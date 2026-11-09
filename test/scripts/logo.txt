@@ -1,0 +1,27 @@
+# startup logo (one of the shots, after TOS boots), then the Help screen
+wait 0.5
+shot
+wait 0.5
+shot
+wait 0.5
+shot
+wait 0.5
+shot
+wait 0.5
+shot
+wait 0.5
+shot
+wait 0.5
+shot
+wait 0.5
+shot
+wait 0.5
+shot
+wait 0.5
+shot
+wait 0.5
+shot
+key 0x62
+wait 1
+shot
+key 0x62

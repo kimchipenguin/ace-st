@@ -22,11 +22,11 @@ format is the same as .TAP) and plays.
   and in-game windows (150k instructions after 1.09M and 3M, with tape loading, typed keys and
   key chords before them) match register for register; registers also match at every
   interrupt before the window. Memory matches except undocumented bits of pushed flags.
-- **Speed: about 50% of a real Ace** on an 8 MHz ST, in Ace Invaders (about 733 ACE-ST steps per
+- **Speed: about 52% of a real Ace** on an 8 MHz ST, in Ace Invaders (about 761 ACE-ST steps per
   frame, ~45 Z80 T-states each). Steps: ROM code ~15%, native keyboard scan ~19-21%, native
   Forth NEXT ~30%, native data stack ~37%, inline 1K RAM writes ~41%, leaner data stack ~45%,
   screen refresh only when video RAM changed, four cells per compare ~48%, leaner Forth
-  NEXT ~50%.
+  NEXT ~50%, handler slots instead of a dispatch table ~52%.
   Far from the 70-80% target.
 - **Native keyboard scan:** `ED FE C9` at 0x0336 replaces the ROM routine (85 Z80 instructions,
   640 T-states per call; the game calls it about 3.7 times per frame) with 68000 code that
@@ -49,13 +49,18 @@ format is the same as .TAP) and plays.
 - **Screen refresh** (12.5 Hz): skipped unless video RAM (or character RAM, which redraws
   everything) was written since the last one; compares four cells at a time with a shadow copy
   and draws only the groups that differ.
-- **Profile now** (`test/pcprof.py`): NEXT dispatch 18%, `forth_next` 17%, `ds_push` 15%,
-  `ds_pop` 9%, `refresh_screen` 3%. Ace Invaders keeps its data stack in the 1K RAM, so most
+- **Handler dispatch:** each main opcode handler starts at `slot_mid + 256 * (signed) opcode`
+  (256-byte slots, 64K of code). NEXT reads the opcode into the high byte of `d0` and jumps
+  through `a4`: 38 cycles, no table load (was 44). Handlers larger than a slot would go out of
+  line (`OVERSIZE` in `tools/gen_z80.py`; none now). ACE.PRG grows to about 134 KB.
+- **Profile now** (`test/pcprof.py`, 800 samples): NEXT dispatch 22%, `forth_next` 19%,
+  `ds_push` 16%, `ds_pop` 9%, `refresh_screen` 4%. Ace Invaders keeps its data stack in the 1K RAM, so most
   of `ds_push` is the mirror copies.
 - `DJNZ $` delay loops (ROM interrupt routine, BEEP delay) finish in one step.
 - Tape loads mirror bytes below 0x4000 like the real 1K RAM/video chips.
 - **Control+O** opens the GEM file selector to pick the tape file (see Build and run).
-- **Help** shows the Jupiter Ace keyboard (EightyOne's picture); Help again goes back.
+- **Help** shows the Jupiter Ace logo and keyboard (EightyOne's picture); Help again goes back.
+- Startup screen: the Jupiter Ace logo for 2 seconds; any key skips it.
 
 ## Testing
 
@@ -68,7 +73,7 @@ format is the same as .TAP) and plays.
   dictionary-wrap code, so a normal trace checks those paths too.
 - `make count`: ACECOUNT.PRG keeps instruction and 50 Hz frame counters for speed checks;
   `test/scripts/gcount.txt` reads them in the game (address from Hatari's `info basepage`:
-  BSS start + offset of `icount` in a vasm `-L` listing; $341C8 under TOS 1.04 right now).
+  BSS start + offset of `icount` in a vasm `-L` listing; $43100 under TOS 1.04 right now).
 - The oracle has its own tape loader with ACE-ST's rules: xAce's `tape_skip_block` seeks
   backwards at the end of the tape. Debug aids: `WATCH=addr`, `KBLOG=record`, `TAPELOG=1`.
   It runs the ROM code behind both native traps as one step and prints their counts.
@@ -84,6 +89,7 @@ format is the same as .TAP) and plays.
   untested here.
 - `test/scripts/help.txt`: Help at the prompt and in the game; keys typed meanwhile (also Esc)
   are ignored; Control+Q quits to the desktop.
+- `test/scripts/logo.txt`: screenshots of the startup logo and the Help screen.
 - The rig's `type` sends punctuation (`. + : * - = ; , / "`) as Alt (= Symbol Shift) + key.
 
 ## Build and run
@@ -98,7 +104,8 @@ make run                             # Hatari, ST high (mono)
 Tapes use `TAPE.ACE` in the same directory, in xAce's block format (a .TAP works as is). **Control+O** opens the GEM file
 selector and makes the chosen file the tape for the next `LOAD`/`SAVE`; a name that does not
 exist yet becomes a new, empty tape. A write-protected tape is opened read-only. Control+O needs
-the AES, so it does nothing when ACE.PRG runs from the AUTO folder. **Help** shows the Ace
+the AES, so it does nothing when ACE.PRG runs from the AUTO folder. At startup the Jupiter Ace logo shows for
+2 seconds (any key skips it). **Help** shows the Ace
 keyboard and stops the Ace until Help is pressed again. **Control+Q** quits. Needs ST
 high (640x400 mono).
 
@@ -114,7 +121,8 @@ high (640x400 mono).
 | `src/z80core.s` `kb_scan` | Native ROM keyboard scan (`ED FE C9` at 0x0336) |
 | `src/z80core.s` `forth_next` | Native Forth checks + NEXT (`ED FF` at 0x04C8) |
 | `src/z80core.s` `ds_push` etc. | Native Forth data stack (`RST 10`, `RST 18`, `ED FB` at 0x084E) |
-| `src/main.s` | Startup, IKBD and Timer C handlers, Help keyboard picture, data |
+| `src/main.s` | Startup, logo screen, IKBD and Timer C handlers, Help keyboard picture, data |
+| `tools/logo.sh` | Renders the logo in `assets/Jupiter ACE Logo.pdf` to `assets/logo.pbm` (448x103, 1 bit; needs Ghostscript and ImageMagick); `make` turns it into `src/logo.bin` |
 | `tools/kbpic.py` | Converts `assets/keyboardJupiterAce.bmp` (EightyOne) to `src/kbpic.bin` (1 bit, 512x223) |
 
 ## Design
@@ -122,7 +130,8 @@ high (640x400 mono).
 - Flat 64K array, byte accesses only (the 68000 faults on odd word access).
 - Z80 PC and SP are host pointers; HL/DE/BC are 16-bit in data registers; A is `d7`.
 - Z80 flags live as a 68000 CCR image in `d3` (S=N, Z=Z, P/V=V, C=C).
-- Tables hold 16-bit offsets from `core_mid`, so the generated code can be up to 64K.
+- Main opcodes dispatch to fixed 256-byte slots; prefix tables (CB, ED, DD, FD, DDCB) hold
+  handler addresses.
 - The 50 Hz tick is a flag from Timer C, sampled at taken branches, calls, returns and HALT.
 
 ## Known gaps

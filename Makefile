@@ -9,7 +9,7 @@ TRACEN ?= 150000
 TRACESKIP ?= 0
 HATARI ?= hatari
 
-GEN = src/z80ops.s src/tables.s src/kbpic.bin
+GEN = src/z80ops.s src/tables.s src/kbpic.bin src/logo.bin
 SRCS = $(wildcard src/*.s)
 
 all: ACE.PRG
@@ -22,6 +22,10 @@ src/z80ops.s src/tables.s: tools/gen_z80.py
 
 src/kbpic.bin: tools/kbpic.py assets/keyboardJupiterAce.bmp
 	python3 tools/kbpic.py assets/keyboardJupiterAce.bmp $@
+
+# logo: 448x103 PBM (tools/logo.sh renders it from the PDF); keep the bitmap body
+src/logo.bin: assets/logo.pbm
+	tail -c 5768 assets/logo.pbm > $@
 
 ACE.PRG: $(SRCS) $(GEN)
 	$(VASM) -Ftos -m68000 -Isrc -o $@ src/main.s

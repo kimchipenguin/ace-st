@@ -22,16 +22,49 @@ def emit(s=''):
     out.append(s)
 
 
+mains = {}          # main-page handler bodies, placed in 256-byte slots
+# main handlers longer than a slot: the slot jumps to the body elsewhere
+OVERSIZE = set()
+
+
 def handler(tab, code, lines, tail='NEXT'):
     name = '%s_%02x' % (tab, code)
     assert code not in tables[tab], name
     tables[tab][code] = name
-    emit('%s:' % name)
-    for l in lines:
-        emit(l if l.startswith('.') else '        ' + l)
+    body = [l if l.startswith('.') else '        ' + l for l in lines]
     if tail:
-        emit('        ' + tail)
+        body.append('        ' + tail)
+    if tab == 'o':
+        mains[code] = body
+        return
+    emit('%s:' % name)
+    out.extend(body)
     emit()
+
+
+def slots():
+    """Main-page handlers at slot_mid + (opcode << 8 as a signed word):
+    0x80-0xFF below slot_mid, 0x00-0x7F above.  NEXT jumps there with no
+    table.  Each slot is padded to 256 bytes; an oversized handler makes
+    the dcb.b count negative and vasm stops."""
+    emit('; ---- main opcode slots (256 bytes each, see NEXT) ----')
+    emit('        even')
+    emit('slot_base:')
+    order = list(range(0x80, 0x100)) + list(range(0x80))
+    for i, code in enumerate(order):
+        name = 'o_%02x' % code
+        emit('%s:' % name)
+        if code in OVERSIZE:
+            emit('        jmp     %s_x' % name)
+        else:
+            out.extend(mains[code])
+        emit('        dcb.b   slot_base+%d-*,0' % ((i + 1) * 256))
+    emit('slot_end:')
+    emit()
+    for code in sorted(OVERSIZE):
+        emit('o_%02x_x:' % code)
+        out.extend(mains[code])
+        emit()
 
 
 R8 = ['B', 'C', 'D', 'E', 'H', 'L', 'M', 'A']
@@ -403,9 +436,9 @@ def table(name, tab, default):
         tgt = tables[tab].get(code)
         if tgt is None:
             tgt = default(code)
-        row.append('%s-core_mid' % tgt)
+        row.append(tgt)
         if len(row) == 8:
-            emit('        dc.w    ' + ','.join(row))
+            emit('        dc.l    ' + ','.join(row))
             row = []
     emit()
 
@@ -419,6 +452,10 @@ def write_ops():
     gen_index('dd', 'ST_IX')
     gen_index('fd', 'ST_IY')
     gen_ddcb()
+    body = out[2:]
+    del out[2:]
+    slots()
+    out.extend(body)
     emit('o_bad:')
     emit('        jmp     unimpl')
     emit()
@@ -427,8 +464,7 @@ def write_ops():
     for code in range(256):
         assert code in tables['cb'], 'missing cb %02x' % code
         assert code in tables['ddcb'], 'missing ddcb %02x' % code
-    emit('; ---- dispatch tables (word offsets from core_mid) ----')
-    table('main', 'o', lambda c: 'o_bad')
+    emit('; ---- prefix dispatch tables (handler addresses) ----')
     table('cb', 'cb', lambda c: 'o_bad')
     table('ed', 'ed', lambda c: 'o_00')                # unknown ED = NOP
     table('dd', 'dd', lambda c: 'o_%02x' % c)          # prefix ignored

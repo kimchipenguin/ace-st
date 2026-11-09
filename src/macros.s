@@ -17,8 +17,8 @@
 ;   a0  Z80 PC  as host pointer (mem + pc)
 ;   a1  Z80 SP  as host pointer (mem + sp; SP=0 is stored as mem+65536)
 ;   a2  scratch / table pointer
-;   a3  main opcode table (word offsets relative to a4)
-;   a4  core_mid (jump base for all opcode tables)
+;   a3  unused by the core
+;   a4  slot_mid: main opcode handlers at a4 + (opcode << 8, signed)
 ;   a5  mem     (64K Z80 address space, flat)
 ;   a6  state   (shadow registers, IX, IY, IFF, flags for the host)
 ;
@@ -62,21 +62,21 @@ NEXT    macro
         ifd     ICOUNT
         addq.l  #1,icount
         endif
-        moveq   #0,d0
-        move.b  (a0)+,d0
-        add.w   d0,d0
-        move.w  (a3,d0.w),d0
-        jmp     (a4,d0.w)
+        move.b  (a0)+,-(sp)                 ; a byte pushed on a7 lands in
+        move.w  (sp)+,d0                    ; the high half: d0 = op << 8
+        clr.b   d0
+        jmp     (a4,d0.w)                   ; slot_mid + 256 * op (signed)
         endm
 
-; fetch the next byte and dispatch through table \1 (prefix pages)
+; fetch the next byte and dispatch through prefix table \1 (addresses)
 NEXTP   macro
         moveq   #0,d0
         move.b  (a0)+,d0
         add.w   d0,d0
+        add.w   d0,d0
         lea     \1,a2
-        move.w  (a2,d0.w),d0
-        jmp     (a4,d0.w)
+        movea.l (a2,d0.w),a2
+        jmp     (a2)
         endm
 
 ; sample the 50 Hz interrupt flag at control-flow instructions

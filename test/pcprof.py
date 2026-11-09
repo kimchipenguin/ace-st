@@ -17,7 +17,7 @@ labs = sorted((int(m.group(2), 16), m.group(1)) for m in re.finditer(
 keys = [a for a, _ in labs]
 prg = open('ACE.PRG', 'rb').read()
 text = prg[28:28 + int.from_bytes(prg[2:6], 'big')]
-pat = bytes.fromhex('70001018d04030330000' '4ef40000')
+pat = bytes.fromhex('1f18301f4200' '4ef40000')   # NEXT: byte push, clr.b, jmp (a4,d0.w)
 starts = set()
 i = text.find(pat)
 while i >= 0:
@@ -33,7 +33,7 @@ for l in open(sys.argv[2]):
     if pc < 0 or pc >= len(text):
         out += 1
         continue
-    if any(pc - o in starts for o in (0, 2, 4, 6, 10)):
+    if any(pc - o in starts for o in (0, 2, 4, 6)):
         nxt += 1
     c[labs[bisect.bisect_right(keys, pc) - 1][1]] += 1
 print('%d samples, %.1f%% outside ACE-ST code (TOS, ISRs), %.1f%% in NEXT dispatch'

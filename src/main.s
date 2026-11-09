@@ -112,11 +112,7 @@ start:
         move.b  #4,tc_div
         st      state+ST_REDRAW
 
-        ; screen: black, no cursor, no mouse
-        movea.l scr_ptr,a0
-        move.w  #(32000/4)-1,d0
-.clr:   move.l  #-1,(a0)+
-        dbra    d0,.clr
+        ; no cursor, no mouse
         clr.w   -(sp)                       ; Cursconf(0 = hide, 0)
         clr.w   -(sp)
         move.w  #21,-(sp)
@@ -138,6 +134,31 @@ start:
         move.b  #$1a,d0                     ; IKBD: disable joysticks
         bsr     ikbd_send
 
+        ; startup screen: the Jupiter Ace logo for 2 s (a key skips it)
+        move.w  #(400-LOGO_H)/2,d0
+        jsr     draw_logo
+        clr.b   any_key
+        move.l  $4ba.w,d1                   ; _hz_200
+        add.l   #400,d1
+.splash:
+        tst.b   quit_flag
+        bne     shutdown
+        tst.b   any_key
+        bne.s   .spl_end
+        cmp.l   $4ba.w,d1
+        bhi.s   .splash
+.spl_end:
+        lea     keyrows,a0                  ; forget keys pressed meanwhile
+        moveq   #-1,d0
+        move.l  d0,(a0)+
+        move.l  d0,(a0)
+        clr.b   help_req
+        clr.b   open_flag
+        movea.l scr_ptr,a0                  ; black screen for the Ace
+        move.w  #(32000/4)-1,d0
+.clr:   move.l  #-1,(a0)+
+        dbra    d0,.clr
+
         ifd     TRACE
         move.l  #TRACE*18,-(sp)
         move.w  #$48,-(sp)                  ; Malloc
@@ -157,8 +178,7 @@ start:
         ; Z80 reset
         lea     mem,a5
         lea     state,a6
-        lea     main_table,a3
-        lea     core_mid,a4
+        lea     slot_base+$8000,a4          ; slot_mid
         movea.l a5,a0                       ; PC = 0
         movea.l a5,a1
         adda.l  #65536,a1                   ; SP = 0
@@ -245,16 +265,14 @@ host_service:
 .nr:    movem.l (sp)+,d0-d7/a0-a6
         rts
 
-; Help: show EightyOne's Jupiter Ace keyboard picture (512x223, 1 bit)
-; centred on a white screen; the Ace stops until Help again (or Control+Q).
+; Help: show the Jupiter Ace logo and EightyOne's keyboard picture
+; (512x223, 1 bit) on a white screen; the Ace stops until Help again
+; (or Control+Q).
 help_show:
         clr.b   help_req
-        movea.l scr_ptr,a0
-        movea.l a0,a1
-        moveq   #0,d1
-        move.w  #(32000/4)-1,d0
-.clr:   move.l  d1,(a0)+
-        dbra    d0,.clr
+        move.w  #HELP_Y,d0
+        bsr     draw_logo
+        movea.l scr_ptr,a1
         lea     KBPIC_Y*80+8(a1),a1
         lea     kbpic,a0
         move.w  #KBPIC_H-1,d0
@@ -282,7 +300,31 @@ help_show:
         rts
 
 KBPIC_H equ 223
-KBPIC_Y equ (400-KBPIC_H)/2
+HELP_Y  equ (400-LOGO_H-16-KBPIC_H)/2       ; logo, 16 lines gap, keyboard
+KBPIC_Y equ HELP_Y+LOGO_H+16
+
+; White screen with the Jupiter Ace logo (448x103, 1 bit) centred
+; horizontally, top line in d0.w.
+draw_logo:
+        movea.l scr_ptr,a0
+        movea.l a0,a1
+        moveq   #0,d1
+        move.w  #(32000/4)-1,d2
+.clr:   move.l  d1,(a0)+
+        dbra    d2,.clr
+        mulu    #80,d0
+        lea     (80-LOGO_W)/2(a1,d0.l),a1
+        lea     logopic,a0
+        move.w  #LOGO_H-1,d0
+.row:   moveq   #LOGO_W/4-1,d1
+.cp:    move.l  (a0)+,(a1)+
+        dbra    d1,.cp
+        lea     80-LOGO_W(a1),a1
+        dbra    d0,.row
+        rts
+
+LOGO_W  equ 56                              ; bytes per line
+LOGO_H  equ 103
 
 ; ---------------------------------------------------------------------------
 ; Interrupt handlers
@@ -318,7 +360,10 @@ ikbd_isr:
         lea     skiptab,a0
         move.b  (a0,d1.w),ikbd_skip
         bra.s   .loop
-.key:   move.b  d1,d0
+.key:   tst.b   d1                          ; any make code (startup screen)
+        bmi.s   .kb
+        st      any_key
+.kb:    move.b  d1,d0
         and.b   #$7f,d0
         cmp.b   #$1d,d0                     ; Control (no Ace key): track it
         bne.s   .q
@@ -407,6 +452,8 @@ tracename3: dc.b "TRACEMEM.BIN",0
 tracename4: dc.b "TRACEIN.BIN",0
           even
 kbpic:    incbin "kbpic.bin"                ; tools/kbpic.py, from EightyOne
+          even
+logopic:  incbin "logo.bin"                 ; assets/logo.pbm (tools/logo.sh)
 msg_mem:  dc.b  "Not enough memory for the trace buffer.",13,10,0
           even
 
@@ -436,6 +483,7 @@ svc_tick:    ds.b 1
 quit_flag:   ds.b 1
 open_flag:   ds.b 1
 help_req:    ds.b 1
+any_key:     ds.b 1
 help_on:     ds.b 1
 help_close:  ds.b 1
 ctrl_down:   ds.b 1

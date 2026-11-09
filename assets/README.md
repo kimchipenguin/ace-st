@@ -11,3 +11,7 @@ ACE ST uses the same licence; see `LICENSE` in the top directory.
 
 `tools/kbpic.py` turns the picture into `src/kbpic.bin`, a 1-bit bitmap for ST high,
 which the **Help** key shows.
+
+`Jupiter ACE Logo.pdf` holds the Jupiter Ace logo (three versions). `tools/logo.sh`
+renders the top one to `logo.pbm` (448x103, 1 bit, red stripes in black), which ACE ST
+shows at startup and above the keyboard on the **Help** screen.

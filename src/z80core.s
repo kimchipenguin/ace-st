@@ -589,11 +589,9 @@ unimpl:
         jmp     shutdown
 
 ; ---------------------------------------------------------------------------
-; The handlers.  core_mid is the base for all 16-bit table offsets, so the
-; generated code may be up to 64K long.
+; The handlers: main opcodes in 256-byte slots around slot_mid (64K), then
+; the prefix handlers and their address tables.
 ; ---------------------------------------------------------------------------
-core_base:
-core_mid equ    core_base+$8000
         include "z80ops.s"
 
         include "tables.s"
