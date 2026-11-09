@@ -274,10 +274,17 @@ DSPTR   macro                               ; d1 = [3C3B]
         move.b  $3c3b(a5),d1
         endm
 
-DSSET   macro                               ; [3C3B] = HL (d6); clobbers d0-d2
-        move.l  #$3c3b,d1
-        move.w  d6,d2
-        STOREW
+DSSET   macro                               ; [3C3B] = HL (d6) and its three
+        move.b  d6,$303b(a5)                ; 1K RAM mirrors; clobbers d0
+        move.b  d6,$343b(a5)
+        move.b  d6,$383b(a5)
+        move.b  d6,$3c3b(a5)
+        move.w  d6,d0
+        lsr.w   #8,d0
+        move.b  d0,$303c(a5)
+        move.b  d0,$343c(a5)
+        move.b  d0,$383c(a5)
+        move.b  d0,$3c3c(a5)
         endm
 
 RSTADR  macro                               ; return address below SP
@@ -291,17 +298,45 @@ RSTADR  macro                               ; return address below SP
 ds_push:
         RSTADR
         DSPTR
-        move.b  d5,d2                       ; LD (HL),E
-        STORE
-        addq.w  #1,d1
-        move.w  d5,d2                       ; LD (HL),D
-        lsr.w   #8,d2
-        STORE
-        addq.w  #1,d1
+        cmp.w   #$4000,d1
+        bcs.s   .low
+        cmp.w   #$ffff,d1                   ; D would land at 0000 (ROM)
+        beq     .gen
+        move.b  d5,(a5,d1.l)                ; plain RAM: LD (HL),E / D
+        move.w  d5,d0
+        lsr.w   #8,d0
+        move.b  d0,1(a5,d1.l)
+.set:   addq.w  #2,d1
         move.l  d1,d6
         DSSET
         CHKINT
         NEXT
+.low:   cmp.w   #$3000,d1                   ; 1K RAM, both bytes in one copy:
+        bcs     .gen                        ; write them and their mirrors
+        move.w  d1,d0
+        and.w   #$03ff,d0
+        cmp.w   #$03ff,d0
+        beq     .gen
+        lea     (a5,d0.w),a2
+        move.b  d5,$3000(a2)
+        move.b  d5,$3400(a2)
+        move.b  d5,$3800(a2)
+        move.b  d5,$3c00(a2)
+        move.w  d5,d0
+        lsr.w   #8,d0
+        move.b  d0,$3001(a2)
+        move.b  d0,$3401(a2)
+        move.b  d0,$3801(a2)
+        move.b  d0,$3c01(a2)
+        bra     .set
+.gen:   move.b  d5,d2                       ; anything else: checked stores
+        STORE
+        addq.w  #1,d1
+        move.w  d5,d2
+        lsr.w   #8,d2
+        STORE
+        subq.w  #1,d1
+        bra     .set
 
 ds_pop:
         RSTADR
