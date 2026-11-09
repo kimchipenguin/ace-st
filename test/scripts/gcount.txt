@@ -6,15 +6,15 @@ wait 6
 type forget gr_
 wait 3
 type load run_
-wait 5
+wait 8
 type run_
 wait 8
 key 0x1c
 wait 5
 shot
-dbg m $3411a 8
+dbg m $34196 8
 wait 10
-dbg m $3411a 8
+dbg m $34196 8
 wait 10
-dbg m $3411a 8
+dbg m $34196 8
 shot

@@ -21,9 +21,10 @@ format is the same as .TAP) and plays.
   and in-game windows (150k instructions after 1.09M and 3M, with tape loading, typed keys and
   key chords before them) match register for register; registers also match at every
   interrupt before the window. Memory matches except undocumented bits of pushed flags.
-- **Speed: about 45% of a real Ace** on an 8 MHz ST, in Ace Invaders (about 656 ACE-ST steps per
+- **Speed: about 48% of a real Ace** on an 8 MHz ST, in Ace Invaders (about 700 ACE-ST steps per
   frame, ~45 Z80 T-states each). Steps: ROM code ~15%, native keyboard scan ~19-21%, native
-  Forth NEXT ~30%, native data stack ~37%, inline 1K RAM writes ~41%, leaner data stack ~45%.
+  Forth NEXT ~30%, native data stack ~37%, inline 1K RAM writes ~41%, leaner data stack ~45%,
+  screen refresh only when video RAM changed, four cells per compare ~48%.
   Far from the 70-80% target.
 - **Native keyboard scan:** `ED FE C9` at 0x0336 replaces the ROM routine (85 Z80 instructions,
   640 T-states per call; the game calls it about 3.7 times per frame) with 68000 code that
@@ -41,13 +42,16 @@ format is the same as .TAP) and plays.
   pushes into ROM/video RAM or across a boundary use the checked stores.
 - **1K RAM writes:** the STORE macro writes 0x3000-0x3FFF (Forth data stack, system variables)
   and its three mirrors inline; ROM, video and character RAM still go through `store_low`.
-- **Profile now** (`test/pcprof.py`): `forth_next` 22%, NEXT dispatch 16%, `ds_push` 13.5%,
-  `refresh_screen` 9%, `ds_pop` 5%. Ace Invaders keeps its data stack in the 1K RAM, so most
-  of `ds_push` is now the mirror copies.
+- **Screen refresh** (12.5 Hz): skipped unless video RAM (or character RAM, which redraws
+  everything) was written since the last one; compares four cells at a time with a shadow copy
+  and draws only the groups that differ.
+- **Profile now** (`test/pcprof.py`): `forth_next` 22%, NEXT dispatch 17%, `ds_push` 11%,
+  `ds_pop` 9%, `refresh_screen` 4%. Ace Invaders keeps its data stack in the 1K RAM, so most
+  of `ds_push` is the mirror copies.
 - `DJNZ $` delay loops (ROM interrupt routine, BEEP delay) finish in one step.
 - Tape loads mirror bytes below 0x4000 like the real 1K RAM/video chips.
 - **Control+O** opens the GEM file selector to pick the tape file (see Build and run).
-- **Help** shows the Jupiter Ace keyboard (EightyOne's picture); Help or Esc goes back.
+- **Help** shows the Jupiter Ace keyboard (EightyOne's picture); Help again goes back.
 
 ## Testing
 
@@ -58,7 +62,7 @@ format is the same as .TAP) and plays.
   The trace build also logs port reads (TRACEIN.BIN) and Z80 memory (TRACEMEM.BIN).
 - `make count`: ACECOUNT.PRG keeps instruction and 50 Hz frame counters for speed checks;
   `test/scripts/gcount.txt` reads them in the game (address from Hatari's `info basepage`:
-  BSS start + offset of `icount` in a vasm `-L` listing; $3411A under TOS 1.04 right now).
+  BSS start + offset of `icount` in a vasm `-L` listing; $34196 under TOS 1.04 right now).
 - The oracle has its own tape loader with ACE-ST's rules: xAce's `tape_skip_block` seeks
   backwards at the end of the tape. Debug aids: `WATCH=addr`, `KBLOG=record`, `TAPELOG=1`.
   It runs the ROM code behind both native traps as one step and prints their counts.
@@ -72,7 +76,8 @@ format is the same as .TAP) and plays.
   Control+O, type the name in the selector, load and start the game. `tapecancel.txt`: Control+O
   with an empty name keeps TAPE.ACE. TOS 1.04's selector has no Cancel key, so Cancel itself is
   untested here.
-- `test/scripts/help.txt`: Help at the prompt and in the game; keys typed meanwhile are ignored.
+- `test/scripts/help.txt`: Help at the prompt and in the game; keys typed meanwhile (also Esc)
+  are ignored; Control+Q quits to the desktop.
 - The rig's `type` sends punctuation (`. + : * - = ; , / "`) as Alt (= Symbol Shift) + key.
 
 ## Build and run
@@ -88,7 +93,7 @@ same directory, in xAce's block format (a .TAP works as is). **Control+O** opens
 selector and makes the chosen file the tape for the next `LOAD`/`SAVE`; a name that does not
 exist yet becomes a new, empty tape. A write-protected tape is opened read-only. Control+O needs
 the AES, so it does nothing when ACE.PRG runs from the AUTO folder. **Help** shows the Ace
-keyboard and stops the Ace until Help or Esc is pressed. **Undo** quits. Needs ST
+keyboard and stops the Ace until Help is pressed again. **Control+Q** quits. Needs ST
 high (640x400 mono).
 
 ## Layout

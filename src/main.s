@@ -4,8 +4,8 @@
 ;
 ; Build:  make   (vasm, Motorola syntax, -Ftos)
 ; Needs:  ACE.ROM (8192 bytes) in the current directory, ST high (mono).
-; Keys:   Undo quits, Control+O picks the tape file (GEM file selector),
-;         Help shows the Ace keyboard (Help or Esc goes back).
+; Keys:   Control+Q quits, Control+O picks the tape file (GEM file selector),
+;         Help shows the Ace keyboard (Help again goes back).
 ; GPL v2 or later.
 ; ---------------------------------------------------------------------------
 
@@ -179,6 +179,10 @@ fail:
         bra.s   leave
 
 shutdown:
+.rel:   tst.b   ctrl_down                   ; wait until Control and Q are up,
+        bne.s   .rel                        ; so no key reaches the desktop
+        tst.b   q_down
+        bne.s   .rel
         move.w  #$2700,sr
         move.l  old_timerc,$114.w
         move.l  old_ikbd,$118.w
@@ -188,6 +192,18 @@ shutdown:
         move.b  #$14,d0                     ; IKBD: joystick events
         bsr     ikbd_send
         jsr     tape_close
+.flush: move.w  #2,-(sp)                    ; drop keys TOS still has
+        move.w  #1,-(sp)                    ; Bconstat(CON)
+        trap    #13
+        addq.l  #4,sp
+        tst.w   d0
+        beq.s   .flushed
+        move.w  #2,-(sp)
+        move.w  #2,-(sp)                    ; Bconin(CON)
+        trap    #13
+        addq.l  #4,sp
+        bra.s   .flush
+.flushed:
         dc.w    $a009                       ; Line-A show mouse
         clr.w   -(sp)                       ; Cursconf(1 = show, rate 0)
         move.w  #1,-(sp)
@@ -229,7 +245,7 @@ host_service:
         rts
 
 ; Help: show EightyOne's Jupiter Ace keyboard picture (512x223, 1 bit)
-; centred on a white screen; the Ace stops until Help or Esc (or Undo).
+; centred on a white screen; the Ace stops until Help again (or Control+Q).
 help_show:
         clr.b   help_req
         movea.l scr_ptr,a0
@@ -301,29 +317,34 @@ ikbd_isr:
         lea     skiptab,a0
         move.b  (a0,d1.w),ikbd_skip
         bra.s   .loop
-.key:   cmp.b   #$61,d1                     ; Undo make code = quit
-        bne.s   .ctl
-        st      quit_flag
-.ctl:   tst.b   help_on                     ; keyboard picture shown:
-        beq.s   .hlp                        ; swallow keys, Help/Esc close it
-        cmp.b   #$62,d1
-        beq.s   .hcl
-        cmp.b   #$01,d1
-        bne     .loop
-.hcl:   st      help_close
-        bra     .loop
-.hlp:   cmp.b   #$62,d1                     ; Help make: show the keyboard
-        bne.s   .ctl2
-        st      help_req
-        bra     .loop
-.ctl2:  move.b  d1,d0
+.key:   move.b  d1,d0
         and.b   #$7f,d0
         cmp.b   #$1d,d0                     ; Control (no Ace key): track it
-        bne.s   .o
+        bne.s   .q
         tst.b   d1
         smi     d0
         not.b   d0
         move.b  d0,ctrl_down
+        bra     .loop
+.q:     cmp.b   #$10,d0                     ; Control+Q: quit
+        bne.s   .hon
+        tst.b   d1
+        bmi.s   .qup
+        tst.b   ctrl_down
+        beq.s   .hon
+        st      q_down
+        st      quit_flag
+        bra     .loop
+.qup:   clr.b   q_down
+.hon:   tst.b   help_on                     ; keyboard picture shown:
+        beq.s   .hlp                        ; swallow keys, Help closes it
+        cmp.b   #$62,d1
+        bne     .loop
+        st      help_close
+        bra     .loop
+.hlp:   cmp.b   #$62,d1                     ; Help make: show the keyboard
+        bne.s   .o
+        st      help_req
         bra     .loop
 .o:     cmp.b   #$18,d1                     ; Control+O make: tape selector
         bne.s   .map
@@ -394,6 +415,7 @@ msg_mem:  dc.b  "Not enough memory for the trace buffer.",13,10,0
         even
 mem:         ds.b 65536+64
 state:       ds.b ST_SIZE+12
+        even
 shadow:      ds.b 768
 expand:      ds.b 512
         even
@@ -416,6 +438,7 @@ help_req:    ds.b 1
 help_on:     ds.b 1
 help_close:  ds.b 1
 ctrl_down:   ds.b 1
+q_down:      ds.b 1
 aes_init:    ds.b 1
         even
 aes_control: ds.w 6

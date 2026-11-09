@@ -23,10 +23,18 @@ build_expand:
         rts
 
 ; Redraw changed cells (or all when ST_REDRAW is set).  Called from
-; host_service with all registers saved.
+; host_service with all registers saved.  Does nothing unless video RAM
+; (ST_VDIRTY) or character RAM (ST_REDRAW) was written since the last call;
+; all such writes go through store_low.  Compares four cells at a time with
+; the shadow copy and draws only the cells of groups that differ.
 refresh_screen:
         move.b  ST_REDRAW(a6),d6
-        clr.b   ST_REDRAW(a6)
+        bne.s   .go
+        tst.b   ST_VDIRTY(a6)
+        bne.s   .go
+        rts
+.go:    clr.b   ST_REDRAW(a6)
+        clr.b   ST_VDIRTY(a6)
         lea     $2400(a5),a0                ; video RAM (32x24)
         lea     shadow,a1
         lea     $2c00(a5),a2                ; character RAM
@@ -35,7 +43,18 @@ refresh_screen:
         lea     expand,a4
         movea.l a3,a6                       ; a6 = destination of current cell
         moveq   #23,d7
-.row:   moveq   #31,d5
+.row:   moveq   #7,d5                       ; 8 groups of 4 cells
+.grp:   tst.b   d6
+        bne.s   .cells
+        cmpm.l  (a0)+,(a1)+
+        bne.s   .back
+        addq.l  #8,a6
+        dbra    d5,.grp
+        bra.s   .eol
+.back:  subq.l  #4,a0
+        subq.l  #4,a1
+.cells: swap    d5
+        move.w  #3,d5
 .col:   move.b  (a0)+,d0
         cmp.b   (a1),d0
         bne.s   .draw
@@ -63,7 +82,9 @@ refresh_screen:
 .next:  addq.l  #1,a1
         addq.l  #2,a6
         dbra    d5,.col
-        lea     1280(a3),a3
+        swap    d5
+        dbra    d5,.grp
+.eol:   lea     1280(a3),a3
         movea.l a3,a6
         dbra    d7,.row
         rts

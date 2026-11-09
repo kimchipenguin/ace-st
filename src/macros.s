@@ -49,6 +49,7 @@ ST_IFF2   equ 15           ; b
 ST_IM     equ 16           ; b
 ST_I      equ 17           ; b
 ST_REDRAW equ 18           ; b   full screen redraw requested
+ST_VDIRTY equ 19           ; b   video RAM written since the last refresh
 ST_SIZE   equ 20
 
 ; ---------------------------------------------------------------------------

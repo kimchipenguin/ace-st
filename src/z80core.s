@@ -5,7 +5,7 @@
 
 ; Store to 0x0000-0x3FFF.  d1.l = address, d2.b = value.  Clobbers d0.
 ;   0000-1FFF  ROM, write ignored
-;   2000-27FF  video RAM, 1K mirrored (xor $400)
+;   2000-27FF  video RAM, 1K mirrored (xor $400); marks the screen dirty
 ;   2800-2FFF  character RAM, 1K mirrored (xor $400); triggers full redraw
 ;   3000-3FFF  1K user RAM mirrored four times
 store_low:
@@ -17,7 +17,9 @@ store_low:
         cmp.w   #$2800,d1
         bcs.s   .vid
         st      ST_REDRAW(a6)
-.vid:
+        bra.s   .mir
+.vid:   st      ST_VDIRTY(a6)
+.mir:
         moveq   #0,d0
         move.w  d1,d0
         eori.w  #$0400,d0
