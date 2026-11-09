@@ -4,7 +4,8 @@ Jupiter Ace emulator for the Atari ST, written in 68000 assembly (vasm, Motorola
 Licence: GPL v2 or later (see `LICENSE`). Derived in part from xAce (Edward Patel; keyboard
 matrix by Lawrence Woodman; Z80 semantics via xz81/xz80 by Russell Marks and Ian Collier).
 The keyboard picture shown by the Help key is from EightyOne by Michael D Wynne (GPL v2 or
-later, see `assets/README.md`).
+later, see `assets/README.md`). The Jupiter Ace ROM (`ACE.ROM`) is included, as in xAce; it
+is not under the GPL, see `ROM.md`.
 
 The Jupiter ACE is an 8-bit computer most notable for its use of Forth as a built-in
 language.
@@ -58,7 +59,7 @@ format is the same as .TAP) and plays.
 
 ## Testing
 
-- `test/run.sh <name> <script>`: Hatari run with ACE.ROM (from xAce) and TAPE.ACE, scripted keys,
+- `test/run.sh <name> <script>`: Hatari run with ACE.ROM and TAPE.ACE, scripted keys,
   screenshots in test/shots (`type`, `key`, `hold`, `wait`, `shot`, `dbg`, `ff on|off`).
 - `make trace TRACESKIP=n TRACEN=m`, run ACETRACE.PRG with `--memsize 4`, then
   `test/oracle/oracle xAce/ace.rom test/hd/<name>/TRACE.BIN n test/hd/<name>/TRACEINT.BIN`.
@@ -93,8 +94,8 @@ make                                 # -> ACE.PRG
 make run                             # Hatari, ST high (mono)
 ```
 
-Put an 8192-byte `ACE.ROM` next to `ACE.PRG` (not distributed here). Tapes use `TAPE.ACE` in the
-same directory, in xAce's block format (a .TAP works as is). **Control+O** opens the GEM file
+`ACE.ROM` (the 8 KB Jupiter Ace ROM, included; see `ROM.md`) must be next to `ACE.PRG`.
+Tapes use `TAPE.ACE` in the same directory, in xAce's block format (a .TAP works as is). **Control+O** opens the GEM file
 selector and makes the chosen file the tape for the next `LOAD`/`SAVE`; a name that does not
 exist yet becomes a new, empty tape. A write-protected tape is opened read-only. Control+O needs
 the AES, so it does nothing when ACE.PRG runs from the AUTO folder. **Help** shows the Ace

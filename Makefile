@@ -1,6 +1,6 @@
 # ACE-ST build: vasm (Motorola syntax) writes the TOS executable directly.
 #   make            build ACE.PRG
-#   make run        run in Hatari, ST high (mono); needs ACE.ROM next to ACE.PRG
+#   make run        run in Hatari, ST high (mono); with the included ACE.ROM
 #   make trace      ACETRACE.PRG (TRACEN records after TRACESKIP instructions)
 #   make count      ACECOUNT.PRG (instruction + frame counters for speed)
 #   make oracle     host checker for traces (xAce's Z80 core)

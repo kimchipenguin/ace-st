@@ -3,7 +3,8 @@
 ; Program entry, system setup, interrupt handlers, data.
 ;
 ; Build:  make   (vasm, Motorola syntax, -Ftos)
-; Needs:  ACE.ROM (8192 bytes) in the current directory, ST high (mono).
+; Needs:  ACE.ROM (8192 bytes, included, see ROM.md) in the current
+;         directory, ST high (mono).
 ; Keys:   Control+Q quits, Control+O picks the tape file (GEM file selector),
 ;         Help shows the Ace keyboard (Help again goes back).
 ; GPL v2 or later.
