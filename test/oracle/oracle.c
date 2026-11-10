@@ -24,6 +24,21 @@ volatile int interrupted;
 int reset_ace;
 unsigned long tstates, tsmax = 0xffffffffUL;
 static unsigned long tstart, kbsteps, kbcalls, kbts, fnsteps, fncalls, fnts, dscalls;
+static unsigned long natsteps, natcalls, natts;
+
+/* Native Forth words (src/native.s natlist): ACE-ST runs the word at one of
+ * these code addresses in one step when it gets there through its native
+ * NEXT (forth_next, or the end of another native word).  The step ends
+ * after the word's JP (IY), or after the JP (HL) at 04C5 of the ROM's NEXT. */
+static const unsigned short natives[] = {
+  0x0898, 0x08a7, 0x12eb, 0x0e21, 0x1013, 0x133e, 0x0ec3, 0x04b8 };
+static int is_native(unsigned short a)
+{
+  unsigned k;
+  for (k = 0; k < sizeof natives / sizeof natives[0]; k++)
+    if (natives[k] == a) return 1;
+  return 0;
+}
 static unsigned char partable[256];
 static unsigned char kborig[3];
 
@@ -116,7 +131,7 @@ int main(int argc, char **argv)
   unsigned char *evrec = NULL;
   int evchk = 0;
   unsigned short hist[64];
-  int k;
+  int k, natprev = 0;
 
   if (argc < 3) { fprintf(stderr, "usage: oracle rom trace [context]\n"); return 2; }
   for (k = 0; k < 256; k++) {
@@ -209,9 +224,16 @@ int main(int argc, char **argv)
       int kb = pc == 0x336;
       unsigned long kbt0 = tstates;
       hist[i & 63] = pc;
+      int nat = natprev && !getenv("NONATIVE") && is_native(pc);
       int fn = pc == 0x4c8, fnfast = 0;
       /* Forth data stack: RST 10 / RST 18 natively, ED FB at 084E */
-      int ds = mem[pc] == 0xd7 || mem[pc] == 0xdf ? 1 : pc == 0x84e ? 2 : 0;
+      int ds = nat ? 0 : mem[pc] == 0xd7 || mem[pc] == 0xdf ? 1 : pc == 0x84e ? 2 : 0;
+      if (inwin && i - 1 >= skip && (tr[18 * (i - 1 - skip) + 17] != 0) != nat) {
+        printf("NATIVE MISMATCH at record %ld (PC=%04X): trace says %d, oracle %d\n",
+               i - 1, pc, tr[18 * (i - 1 - skip) + 17], nat);
+        return 1;
+      }
+      if (nat) { mem[0x84e] = 0x2a; mem[0x84f] = 0x3b; }
       unsigned short sp0 = sp;
       if (ds == 2) { mem[0x84e] = 0x2a; mem[0x84f] = 0x3b; }
       unsigned short lastop;
@@ -256,6 +278,15 @@ int main(int argc, char **argv)
         mem[0x84e] = 0xed; mem[0x84f] = 0xfb;
       }
       if (ds && inwin) dscalls++;
+      /* ... and native Forth words up to JP (IY) or the JP (HL) at 04C5 */
+      if (nat) {
+        if (inwin) natsteps++;
+        if (lastop != 0x4c5 && !(mem[lastop] == 0xfd && mem[lastop + 1] == 0xe9))
+          goto again;
+        mem[0x84e] = 0xed; mem[0x84f] = 0xfb;
+        if (inwin) { natcalls++; natts += tstates - kbt0; }
+      }
+      natprev = nat ? lastop == 0x4c5 : fn && fnfast;
       /* ... and the Forth checks + NEXT at 04C8 up to the JP (HL) at 04C5 */
       if (fn) {
         if (inwin) fnsteps++;
@@ -365,6 +396,9 @@ int main(int argc, char **argv)
            kbcalls, kbsteps, kbts);
   if (dscalls)
     printf("window: %lu data stack pushes/pops\n", dscalls);
+  if (natcalls)
+    printf("window: %lu native Forth words, %lu Z80 instructions, %lu T-states in them\n",
+           natcalls, natsteps, natts);
   if (fncalls)
     printf("window: %lu Forth NEXTs, %lu Z80 instructions, %lu T-states in them\n",
            fncalls, fnsteps, fnts);

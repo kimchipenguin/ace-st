@@ -22,13 +22,14 @@ format is the same as .TAP) and plays.
   and in-game windows (150k instructions after 1.09M and 3M, with tape loading, typed keys and
   key chords before them) match register for register; registers also match at every
   interrupt before the window. Memory matches except undocumented bits of pushed flags.
-- **Speed: about 56% of a real Ace** on an 8 MHz ST, in Ace Invaders (about 819 ACE-ST steps per
-  frame, ~45 Z80 T-states each). Steps: ROM code ~15%, native keyboard scan ~19-21%, native
+- **Speed: about 85% of a real Ace** on an 8 MHz ST, in Ace Invaders (about 378 ACE-ST steps per
+  frame, ~146 Z80 T-states each; an estimate, since the share of native words, which are long
+  steps, moves between 16% and 26% of all steps over the game). Steps: ROM code ~15%, native keyboard scan ~19-21%, native
   Forth NEXT ~30%, native data stack ~37%, inline 1K RAM writes ~41%, leaner data stack ~45%,
   screen refresh only when video RAM changed, four cells per compare ~48%, leaner Forth
   NEXT ~50%, handler slots instead of a dispatch table ~52%, byte moves through the stack
-  instead of 8-bit shifts and `JP (IY)` straight into `forth_next` ~56%.
-  Far from the 70-80% target.
+  instead of 8-bit shifts and `JP (IY)` straight into `forth_next` ~56%, native Forth
+  words ~85%.
 - **Native keyboard scan:** `ED FE C9` at 0x0336 replaces the ROM routine (85 Z80 instructions,
   640 T-states per call; the game calls it about 3.7 times per frame) with 68000 code that
   returns the same registers and flags. `-DNOKBSCAN` keeps the ROM routine, for comparisons.
@@ -45,6 +46,13 @@ format is the same as .TAP) and plays.
   The new pointer goes straight to 0x3C3B and its three 1K RAM mirrors; a push writes plain
   RAM (0x4000 up) directly, or the 1K RAM and its mirrors through one address register; only
   pushes into ROM/video RAM or across a boundary use the checked stores.
+- **Native Forth words:** after NEXT has found the next word's code address (`fn_hl`, shared by
+  `forth_next` and the ROM's NEXT at 0x04BA), `natab` (one long per address below 0x2000) gives
+  a 68000 routine for the busiest words in Ace Invaders: `C@`, `C!`, `I`, `1-`, number literal,
+  the `+LOOP` runtime, DOCOL (start of every colon definition) and EXIT (`src/native.s`). Each
+  leaves the registers, flags, data stack and the bytes below the Z80 SP as the ROM code does;
+  words that end in `JP (IY)` go straight on into `forth_next`, the others into NEXT. In the game
+  loop these words took most of the time. `-DNONATIVE` leaves them out.
 - **1K RAM writes:** the STORE macro writes 0x3000-0x3FFF (Forth data stack, system variables)
   and its three mirrors inline; ROM, video and character RAM still go through `store_low`.
 - **Screen refresh** (12.5 Hz): skipped unless video RAM (or character RAM, which redraws
@@ -61,7 +69,7 @@ format is the same as .TAP) and plays.
   `moveq`/`and`/`lsr`, 16 cycles instead of about 42.
 - `JP (IY)` with IY = 0x04C8 (the end of every Forth primitive) runs `forth_next` at once
   instead of dispatching the `ED FF` there; trace and count builds still record that step.
-- **Profile now** (`test/pcprof.py`, 800 samples): `forth_next` 22%, NEXT dispatch 20%,
+- **Profile before native words** (`test/pcprof.py`, 800 samples): `forth_next` 22%, NEXT dispatch 20%,
   `ds_push` 14%, `ds_pop` 9%, `refresh_screen` 3%. Ace Invaders keeps its data stack in the 1K RAM, so most
   of `ds_push` is the mirror copies.
 - `DJNZ $` delay loops (ROM interrupt routine, BEEP delay) finish in one step.
@@ -81,10 +89,13 @@ format is the same as .TAP) and plays.
   dictionary-wrap code, so a normal trace checks those paths too.
 - `make count`: ACECOUNT.PRG keeps instruction and 50 Hz frame counters for speed checks;
   `test/scripts/gcount.txt` reads them in the game (address from Hatari's `info basepage`:
-  BSS start + offset of `icount` in a vasm `-L` listing; $42F84 under TOS 1.04 right now).
+  BSS start + offset of `icount` in a vasm `-L` listing; $43666 under TOS 1.04 right now).
 - The oracle has its own tape loader with ACE-ST's rules: xAce's `tape_skip_block` seeks
   backwards at the end of the tape. Debug aids: `WATCH=addr`, `KBLOG=record`, `TAPELOG=1`.
-  It runs the ROM code behind both native traps as one step and prints their counts.
+  It runs the ROM code behind both native traps as one step and prints their counts. A native
+  Forth word (the trace marks it in the record's pad byte) runs in the oracle up to the word's
+  `JP (IY)`, or the `JP (HL)` at 0x04C5 for DOCOL, EXIT, `+LOOP` and literal; `NONATIVE=1` turns
+  that off for traces of a `-DNONATIVE` build.
 - `test/scripts/brk.txt`: stack underflow (ERROR 2), arithmetic, BREAK out of an endless loop
   (ERROR 3); `brktrace.txt` is the same for the oracle (`TRACESKIP=1500000`).
 - Profile: `test/run.sh samp test/scripts/gsample.txt` takes 800 register dumps in the game,
@@ -129,6 +140,7 @@ high (640x400 mono).
 | `src/z80core.s` `kb_scan` | Native ROM keyboard scan (`ED FE C9` at 0x0336) |
 | `src/z80core.s` `forth_next` | Native Forth checks + NEXT (`ED FF` at 0x04C8) |
 | `src/z80core.s` `ds_push` etc. | Native Forth data stack (`RST 10`, `RST 18`, `ED FB` at 0x084E) |
+| `src/native.s` | Native Forth words, looked up in `natab` by `fn_hl` |
 | `src/main.s` | Startup, logo screen, IKBD and Timer C handlers, Help keyboard picture, data |
 | `tools/logo.sh` | Renders the logo in `assets/Jupiter ACE Logo.pdf` to `assets/logo.pbm` (448x103, 1 bit; needs Ghostscript and ImageMagick); `make` turns it into `src/logo.bin` |
 | `tools/kbpic.py` | Converts `assets/keyboardJupiterAce.bmp` (EightyOne) to `src/kbpic.bin` (1 bit, 512x223) |

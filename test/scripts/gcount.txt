@@ -12,9 +12,9 @@ wait 8
 key 0x1c
 wait 5
 shot
-dbg m $42f84 8
+dbg m $43666 8
 wait 10
-dbg m $42f84 8
+dbg m $43666 8
 wait 10
-dbg m $42f84 8
+dbg m $43666 8
 shot

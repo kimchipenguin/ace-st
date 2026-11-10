@@ -175,6 +175,10 @@ start:
         move.l  #trace_in,trace_inp
         endif
 
+        ifnd    NONATIVE
+        jsr     native_init
+        endif
+
         ; Z80 reset
         lea     mem,a5
         lea     state,a6
@@ -425,6 +429,7 @@ ikbd_isr:
 
 ; ---------------------------------------------------------------------------
         include "z80core.s"
+        include "native.s"
         include "video.s"
         include "tape.s"
 
@@ -503,6 +508,7 @@ ikbd_skip:   ds.b 1
 icount:      ds.l 1                         ; ICOUNT build: instructions
 iframes:     ds.l 1                         ; and 50 Hz ticks
 trace_intf:  ds.b 1
+trace_nat:   ds.b 1
         even
 trace_buf:   ds.l 1
 trace_ptr:   ds.l 1
@@ -515,3 +521,5 @@ trace_ev:    ds.b TRACEEVB
 trace_inp:   ds.l 1
 trace_in:    ds.b 262144
         endif
+        even
+natab:       ds.l 8192                      ; native Forth words by ROM address

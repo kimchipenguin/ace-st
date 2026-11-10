@@ -201,20 +201,20 @@ forth_next:
         move.w  (sp)+,d2
         move.b  $3c3b(a5),d2
         cmp.w   #$fff5,d1                   ; ADD HL,11 carries: exact code
-        bcc     .wrap
+        bcc     fn_wrap
         ifd     FNTEST_WRAP                 ; test: always the exact code
-        bra     .wrap
+        bra     fn_wrap
         endif
         add.w   #11,d1                      ; no carry: SBC borrows when
         cmp.w   d2,d1                       ; [3C37]+11 < [3C3B]
-        bcc     .slow                       ; no borrow: error 2
-.chk2:  add.w   #$1e,d2                     ; HL = 1E + [3C3B]
-        bcs     .slow                       ; carry: error 1
+        bcc     fn_slow                       ; no borrow: error 2
+fn_chk2:  add.w   #$1e,d2                     ; HL = 1E + [3C3B]
+        bcs     fn_slow                       ; carry: error 1
         move.l  a1,d0                       ; SP inside the CALL
         sub.l   a5,d0
         subq.w  #2,d0
         sub.w   d0,d2                       ; SBC HL,SP
-        bcc     .slow
+        bcc     fn_slow
         move    sr,d4                       ; S = N, PV = V
         and.w   #$0a,d4
         lea     keyrows,a2
@@ -222,7 +222,7 @@ forth_next:
         btst    #0,d2
         bne.s   .nobrk
         btst    #0,7(a2)
-        beq     .slow                       ; Shift + Space: BREAK
+        beq     fn_slow                       ; Shift + Space: BREAK
         KLOG
         move.b  7(a2),d2                    ; IN A,(FE) with A = 7F
         KLOG
@@ -236,9 +236,9 @@ forth_next:
         move.w  d4,d3
         move.w  a1,d0                       ; a5 is even: host parity =
         btst    #0,d0                       ; Z80 SP parity
-        bne.s   .odd
+        bne.s   fn_odd
         ifd     FNTEST_ODD                  ; test: always the byte code
-        bra.s   .odd
+        bra.s   fn_odd
         endif
         move.l  #$0000e204,-4(a1)           ; left by CALL 04E4 / PUSH BC
         moveq   #0,d1                       ; IP from the stack (a word,
@@ -251,17 +251,40 @@ forth_next:
         addq.w  #2,d1                       ; IP+2 back on the stack
         rol.w   #8,d1
         move.w  d1,(a1)
-.hl:    moveq   #0,d5                       ; HL = (W), DE = W+2
+        moveq   #0,d4                       ; BC = 0
+; d6 = W: HL = (W), DE = W+2, jump to HL.  Shared with the native words
+; (native.s), which end in the ROM's NEXT at 04BA.  A native word at HL
+; runs at once (table natab).
+fn_hl:  moveq   #0,d5
         move.w  d6,d5
         move.b  1(a5,d5.l),-(sp)
         move.w  (sp)+,d6
         move.b  (a5,d5.l),d6
         addq.w  #2,d5
-        moveq   #0,d4                       ; BC = 0
         lea     (a5,d6.l),a0
         CHKINT
+        ifnd    NONATIVE
+        cmp.w   #$2000,d6                   ; ROM code: native version?
+        bcc.s   .z80
+        move.w  d6,d0
+        lsl.w   #2,d0
+        lea     natab,a2
+        move.l  (a2,d0.w),d0
+        beq.s   .z80
+        ifd     TRACE
+        st      trace_nat                   ; record marked as native
+        jsr     trace_rec
+        clr.b   trace_nat
+        endif
+        ifd     ICOUNT
+        addq.l  #1,icount
+        endif
+        movea.l d0,a2
+        jmp     (a2)
+.z80:
+        endif
         NEXT
-.odd:   move.b  #$04,-1(a1)                 ; odd SP: byte by byte
+fn_odd:   move.b  #$04,-1(a1)                 ; odd SP: byte by byte
         move.b  #$e2,-2(a1)
         clr.b   -3(a1)
         clr.b   -4(a1)
@@ -275,8 +298,9 @@ forth_next:
         move.w  d1,d0
         lsr.w   #8,d0
         move.b  d0,1(a1)
-        bra.s   .hl
-.wrap:  moveq   #0,d0                       ; [3C37] >= FFF5: SBC HL,DE with
+        moveq   #0,d4                       ; BC = 0
+        bra     fn_hl
+fn_wrap:  moveq   #0,d0                       ; [3C37] >= FFF5: SBC HL,DE with
         move.w  d1,d0                       ; the ADD's carry, as the ROM
         add.l   #11,d0
         moveq   #0,d1
@@ -288,9 +312,9 @@ forth_next:
         swap    d0
         sub.l   d1,d0
         sub.l   d4,d0
-        bpl.s   .slow                       ; no borrow: error 2
-        bra     .chk2
-.slow:  moveq   #11,d4                      ; LD BC,11, on at 04CB
+        bpl.s   fn_slow                       ; no borrow: error 2
+        bra     fn_chk2
+fn_slow:  moveq   #11,d4                      ; LD BC,11, on at 04CB
         addq.l  #1,a0
         NEXT
 
@@ -302,8 +326,8 @@ forth_next:
 ; The RST handlers also leave the return address below SP, as RST + RET do.
 DSPTR   macro                               ; d1 = [3C3B]
         moveq   #0,d1
-        move.b  $3c3c(a5),d1
-        lsl.w   #8,d1
+        move.b  $3c3c(a5),-(sp)
+        move.w  (sp)+,d1
         move.b  $3c3b(a5),d1
         endm
 
@@ -312,8 +336,8 @@ DSSET   macro                               ; [3C3B] = HL (d6) and its three
         move.b  d6,$343b(a5)
         move.b  d6,$383b(a5)
         move.b  d6,$3c3b(a5)
-        move.w  d6,d0
-        lsr.w   #8,d0
+        move.w  d6,-(sp)
+        move.b  (sp)+,d0
         move.b  d0,$303c(a5)
         move.b  d0,$343c(a5)
         move.b  d0,$383c(a5)
@@ -324,8 +348,8 @@ RSTADR  macro                               ; return address below SP
         move.l  a0,d0
         sub.l   a5,d0
         move.b  d0,-2(a1)
-        lsr.w   #8,d0
-        move.b  d0,-1(a1)
+        move.w  d0,-(sp)
+        move.b  (sp)+,-1(a1)
         endm
 
 ds_push:
@@ -484,7 +508,7 @@ trace_put:
         move.w  ST_IY(a6),(a2)+
         move.b  trace_intf,(a2)+
         clr.b   trace_intf
-        clr.b   (a2)+
+        move.b  trace_nat,(a2)+             ; 1 = native Forth word
         rts
 .ftab:  dc.b    $00,$01,$04,$05,$40,$41,$44,$45
         dc.b    $80,$81,$84,$85,$c0,$c1,$c4,$c5
