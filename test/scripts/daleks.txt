@@ -1,0 +1,15 @@
+wait 15
+type load daleks_
+wait 5
+type daleks_
+wait 3
+shot
+key 0x39
+wait 3
+shot
+hold 0x14 0.3
+wait 3
+shot
+hold 0x26 0.3
+wait 25
+shot

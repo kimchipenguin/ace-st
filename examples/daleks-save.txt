@@ -1,0 +1,6 @@
+\ acetype commands after daleks.fs: tape (dictionary) first, then start
+\ the game and take a snapshot at its title screen
+SAVE daleks
+#noerr
+DALEKS
+#snap examples/DALEKS.ACE

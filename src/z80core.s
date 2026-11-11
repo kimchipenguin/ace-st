@@ -357,8 +357,8 @@ ds_push:
         DSPTR
         cmp.w   #$4000,d1
         bcs.s   .low
-        cmp.w   #$ffff,d1                   ; D would land at 0000 (ROM)
-        beq     .gen
+        cmp.w   a3,d1                       ; last RAM byte or above (FFFF:
+        bcc     .gen                        ; D would land at 0000, ROM)
         move.b  d5,(a5,d1.l)                ; plain RAM: LD (HL),E / D
         move.w  d5,d0
         lsr.w   #8,d0
@@ -435,8 +435,92 @@ trace_klog:
         endif
 
 ; Port output.  d0.b = port low byte, d1 = high byte, d2.b = value.
-; TODO: the beeper toggles on any access to port 0xFE (drive the YM2149).
+; The speaker is only driven by BEEP (see beep), so nothing to do here.
 out_port:
+        rts
+
+; Native BEEP loop: ED FA at 0BAF, the head of the ROM loop (after DI at
+; 0BAE).  ROM: DE = cycles (0 = 65536), BC = period m; each cycle is
+; IN A,(FE) (BREAK if Space), wait, DEC DE, OUT (FE),A, wait: about 8*m us,
+; which is YM2149 tone period m (2 MHz / 16).  Here channel A plays that tone
+; for DE*m*8 us of real time while the Ace stands still (its interrupts are
+; off, so the 50 Hz ticks of that time are lost).  Leaves what the loop
+; leaves at the EI at 0BC4: A = 0, DE = 0, BC = FF00, F from OR E.  Space
+; stops it and goes to the BREAK error at 0BC7, like the ROM.
+BEEPVOL equ     14
+beep:
+        moveq   #0,d1
+        move.w  d5,d1
+        bne.s   .de
+        move.w  #$ffff,d1
+.de:    mulu.w  d4,d1                       ; time in 8 us units
+        cmp.l   #625*65000,d1
+        bls.s   .lim
+        move.l  #625*65000,d1
+.lim:   add.l   #312,d1
+        divu.w  #625,d1                     ; 5 ms ticks (_hz_200)
+        move.w  d1,d3
+        beq.s   .done                       ; under 2.5 ms: nothing to hear
+        move.w  d4,d0                       ; tone period 1..4095
+        cmp.w   #4095,d0
+        bls.s   .p1
+        move.w  #4095,d0
+.p1:    tst.w   d0
+        bne.s   .p2
+        moveq   #1,d0
+.p2:    move.w  sr,-(sp)
+        or.w    #$0700,sr                   ; TOS writes the YM in its VBL
+        move.b  #0,$ffff8800.w
+        move.b  d0,$ffff8802.w
+        lsr.w   #8,d0
+        move.b  #1,$ffff8800.w
+        move.b  d0,$ffff8802.w
+        move.b  #8,$ffff8800.w
+        move.b  #BEEPVOL,$ffff8802.w
+        move.b  #7,$ffff8800.w              ; mixer: tone A only, keep the
+        move.b  $ffff8800.w,d0              ; port direction bits
+        and.b   #$c0,d0
+        or.b    #$3e,d0
+        move.b  d0,$ffff8802.w
+        move.w  (sp)+,sr
+        moveq   #0,d1
+        move.w  d3,d1
+        add.l   $4ba.w,d1                   ; end time
+.wait:  btst    #0,keyrows+7                ; Space (row 7F bit 0) down?
+        beq.s   .brk
+        tst.b   quit_flag
+        bne.s   .end
+        move.l  $4ba.w,d0
+        sub.l   d1,d0
+        bmi.s   .wait
+.end:   bsr.s   beep_off
+        clr.b   ST_INT(a6)                  ; ticks the Ace missed
+.done:  moveq   #0,d7                       ; A = 0
+        moveq   #0,d5                       ; DE = 0
+        move.l  #$ff00,d4                   ; BC = FF00
+        moveq   #0,d2
+        A_OR                                ; OR E
+        lea     $0bc4(a5),a0
+        NEXT
+.brk:   bsr.s   beep_off
+        clr.b   ST_INT(a6)
+        move.b  keyrows+7,d7                ; IN A,(FE), RRCA: carry clear
+        ror.b   #1,d7
+        moveq   #0,d3
+        lea     $0bc7(a5),a0                ; RST 20: ERROR 3
+        NEXT
+
+; channel A silent
+beep_off:
+        move.w  sr,-(sp)
+        or.w    #$0700,sr
+        move.b  #8,$ffff8800.w
+        move.b  #0,$ffff8802.w
+        move.b  #7,$ffff8800.w
+        move.b  $ffff8800.w,d0
+        or.b    #$3f,d0
+        move.b  d0,$ffff8802.w
+        move.w  (sp)+,sr
         rts
 
 ; 50 Hz service.  Entered by jump from CHKINT / HALT with the Z80 PC already

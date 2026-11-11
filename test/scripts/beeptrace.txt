@@ -1,0 +1,14 @@
+wait 15
+type 100 50 beep 1 2 + ._
+wait 2
+type 30 20 beep 200 10 beep_
+wait 2
+type : b 10 0 do i 10 * 50 + 5 beep loop ;_
+wait 2
+type b b_
+wait 3
+type 3 4 * ._
+wait 2
+shot
+ff on
+wait 60

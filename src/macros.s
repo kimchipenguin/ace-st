@@ -17,7 +17,8 @@
 ;   a0  Z80 PC  as host pointer (mem + pc)
 ;   a1  Z80 SP  as host pointer (mem + sp; SP=0 is stored as mem+65536)
 ;   a2  scratch / table pointer
-;   a3  unused by the core
+;   a3  last RAM address (word: 3FFF / 7FFF / BFFF / FFFF for 3K / 19K /
+;       35K / 51K); STORE ignores writes above it
 ;   a4  slot_mid: main opcode handlers at a4 + (opcode << 8, signed)
 ;   a5  mem     (64K Z80 address space, flat)
 ;   a6  state   (shadow registers, IX, IY, IFF, flags for the host)
@@ -110,6 +111,8 @@ STORE   macro
         jsr     store_low
         bra.s   .dn\@
 .ok\@:
+        cmp.w   a3,d1                       ; above the RAM: nothing there
+        bhi.s   .dn\@
         move.b  d2,(a5,d1.l)
 .dn\@:
         endm

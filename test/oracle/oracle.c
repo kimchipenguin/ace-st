@@ -24,7 +24,7 @@ volatile int interrupted;
 int reset_ace;
 unsigned long tstates, tsmax = 0xffffffffUL;
 static unsigned long tstart, kbsteps, kbcalls, kbts, fnsteps, fncalls, fnts, dscalls;
-static unsigned long natsteps, natcalls, natts;
+static unsigned long natsteps, natcalls, natts, beeps;
 
 /* Native Forth words (src/native.s natlist): ACE-ST runs the word at one of
  * these code addresses in one step when it gets there through its native
@@ -45,9 +45,11 @@ static unsigned char kborig[3];
 /* port reads come from TRACEIN.BIN (logged by the ST), else 255 */
 static unsigned char *inlog;
 static long inlen, inpos;
+static int inbeep;                      /* ACE-ST's BEEP reads no ports */
 unsigned int in(int h, int l)
 {
   (void)h; (void)l;
+  if (inbeep) return 255;
   return inpos < inlen ? inlog[inpos++] : 255;
 }
 unsigned int out(int h, int l, int a) { (void)h; (void)l; (void)a; return 0; }
@@ -152,6 +154,9 @@ int main(int argc, char **argv)
   mem[0x336] = 0xed; mem[0x337] = 0xfe; mem[0x338] = 0xc9;
   mem[0x4c8] = 0xed; mem[0x4c9] = 0xff;
   mem[0x84e] = 0xed; mem[0x84f] = 0xfb;
+  /* BEEP loop: ED FA at 0BAF, one step up to the EI at 0BC4 (NOSOUND=1 for
+     a -DNOSOUND build) */
+  if (!getenv("NOSOUND")) { mem[0xbaf] = 0xed; mem[0xbb0] = 0xfa; }
 
   fp = fopen(argv[2], "rb");
   if (!fp) { perror(argv[2]); return 2; }
@@ -238,6 +243,10 @@ int main(int argc, char **argv)
       if (ds == 2) { mem[0x84e] = 0x2a; mem[0x84f] = 0x3b; }
       unsigned short lastop;
       if (kb) memcpy(mem + 0x336, kborig, 3);
+      int bp = pc == 0xbaf && mem[0xbaf] == 0xed;
+      if (bp) { mem[0xbaf] = 0x3e; mem[0xbb0] = 0x7f; inbeep = 1;
+        if (getenv("BEEPLOG")) printf("BEEP period %u, %u cycles, %.1f ms\n", bc, de,
+                                      (de ? de : 65536) * bc * 8 / 1000.0); }
       if (fn) {                         /* like forth_next: all checks pass? */
         unsigned w37 = mem[0x3c37] | mem[0x3c38] << 8;
         unsigned w3b = mem[0x3c3b] | mem[0x3c3c] << 8;
@@ -278,6 +287,15 @@ int main(int argc, char **argv)
         mem[0x84e] = 0xed; mem[0x84f] = 0xfb;
       }
       if (ds && inwin) dscalls++;
+      /* ... and the BEEP loop up to the EI at 0BC4 */
+      if (bp) {
+        if (pc != 0xbc4)
+          goto again;
+        mem[0xbaf] = 0xed; mem[0xbb0] = 0xfa;
+        inbeep = 0;
+        if (inwin) beeps++;
+        if (getenv("BEEPLOG")) printf("  at record %ld\n", i);
+      }
       /* ... and native Forth words up to JP (IY) or the JP (HL) at 04C5 */
       if (nat) {
         if (inwin) natsteps++;
@@ -399,6 +417,8 @@ int main(int argc, char **argv)
   if (natcalls)
     printf("window: %lu native Forth words, %lu Z80 instructions, %lu T-states in them\n",
            natcalls, natsteps, natts);
+  if (beeps)
+    printf("window: %lu BEEPs\n", beeps);
   if (fncalls)
     printf("window: %lu Forth NEXTs, %lu Z80 instructions, %lu T-states in them\n",
            fncalls, fnsteps, fnts);

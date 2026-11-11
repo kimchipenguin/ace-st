@@ -1,0 +1,26 @@
+wait 5
+shot
+wait 1
+shot
+wait 8
+type 1 2 + ._
+wait 1
+shot
+key 0x62
+wait 1
+shot
+key 0x62
+wait 1
+type load graphics_
+wait 5
+type gr_
+wait 6
+type forget gr_
+wait 3
+type load run_
+wait 8
+type run_
+wait 8
+key 0x1c
+wait 10
+shot

@@ -1,0 +1,13 @@
+# ST medium: Alt+T screenshot, Help closed by a key
+wait 15
+type 1 2 3_
+wait 1
+down 0x38
+key 0x14
+up 0x38
+wait 2
+key 0x62
+wait 2
+key 0x39
+wait 2
+shot

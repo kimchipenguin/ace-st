@@ -1,0 +1,8 @@
+wait 15
+type 100 3000 beep_
+wait 1
+dbg info ym
+shot
+wait 3
+dbg info ym
+shot

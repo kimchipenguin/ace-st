@@ -1,0 +1,19 @@
+# Left (double) click opens the settings dialog, no key reaches the Ace; on
+# the Help screen a click closes the picture (the second click of the
+# double click then opens the dialog)
+wait 15
+lclick x
+wait 3
+shot
+key 0x61
+wait 1
+key 0x1c
+wait 2
+type 1_
+wait 2
+key 0x62
+wait 2
+shot
+lclick x
+wait 3
+shot

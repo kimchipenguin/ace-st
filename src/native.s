@@ -62,8 +62,8 @@ DSPUSH  macro
         DSPTR
         cmp.w   #$4000,d1
         bcs     .lo\@
-        cmp.w   #$ffff,d1
-        beq     .gen\@
+        cmp.w   a3,d1                       ; last RAM byte or above
+        bcc     .gen\@
         move.b  d5,(a5,d1.l)
         move.w  d5,-(sp)
         move.b  (sp)+,1(a5,d1.l)

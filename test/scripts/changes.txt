@@ -1,0 +1,34 @@
+# Help closed by a mouse click and by any key; Alt+T screenshots; the
+# settings dialog; Control+Q leaves the mouse working (IKBD state)
+wait 15
+key 0x62
+wait 2
+shot
+dbg info ikbd
+dbg info ikbd
+rclick x
+wait 2
+shot
+key 0x62
+wait 2
+key 0x2d
+wait 2
+shot
+type 1 2 3_
+wait 1
+down 0x38
+key 0x14
+up 0x38
+wait 2
+key 0x61
+wait 3
+shot
+key 0x1c
+wait 2
+down 0x1d
+key 0x10
+wait 0.5
+up 0x1d
+wait 3
+shot
+dbg info ikbd

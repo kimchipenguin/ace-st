@@ -3975,6 +3975,9 @@ ed_ff:
 ed_fb:
         jmp ds_popbc
 
+ed_fa:
+        jmp beep
+
 dd_21:
         RDIMM16 d0
         move.w d0,ST_IX(a6)
@@ -6524,7 +6527,7 @@ ed_table:
         dc.l    o_00,o_00,o_00,o_00,o_00,o_00,o_00,o_00
         dc.l    o_00,o_00,o_00,o_00,o_00,o_00,o_00,o_00
         dc.l    o_00,o_00,o_00,o_00,o_00,o_00,o_00,o_00
-        dc.l    o_00,o_00,o_00,ed_fb,ed_fc,ed_fd,ed_fe,ed_ff
+        dc.l    o_00,o_00,ed_fa,ed_fb,ed_fc,ed_fd,ed_fe,ed_ff
 
 dd_table:
         dc.l    o_00,o_01,o_02,o_03,o_04,o_05,o_06,o_07
