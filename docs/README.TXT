@@ -1,7 +1,7 @@
 ACE ST - A Jupiter ACE emulator for the Atari ST
 ------------------------------------------------
 
-The Jupiter ACE was an obscure 8-bit computer released in 1982by the British company Jupiter Cantab. It arrived in a crowded market, just a couple of months after the UK release of the ZX Spectrum.
+The Jupiter ACE was an obscure 8-bit computer released in 1982 by the British company Jupiter Cantab. It arrived in a crowded market, just a couple of months after the UK release of the ZX Spectrum.
 
 The most notable feature of the machine is the choice of Forth as the integrated programming environment instead of the more common BASIC. Forth is a very powerful language and well-suited for a system with limited RAM. The hardware looks like a ZX81 with a ZX Spectrum keyboard. It's more powerful than the Zeddy though: The ACE has video memory, a beeper and graphics through redefinition of character tiles.
 
@@ -34,6 +34,10 @@ Example
 -------
 Keeping with the ACE theme, I included a 2026 port of the classic 1984 Macintosh game "Daleks"
 
+License
+-------
+GPL-2.0.
+
 Hotkeys
 -------
 HELP        Show the Jupiter ACE keyboard (image from EightyOne emulator)
@@ -51,3 +55,11 @@ https://www.atariuptodate.de             - all new software releases for the ST
 https://www.jupiter-ace.co.uk/           - Jupiter ACE Archive
 https://lawrencewoodman.github.io/xAce/  - Important resource for this emulator
 
+Version history
+---------------
+0.8     - settings dialog
+        - save screenshot
+        - load .ACE snapshots
+        - sound
+        - compatible with medium resolution
+        - added sample game Daleks

@@ -2,9 +2,9 @@ Daleks for Jupiter ACE
 ----------------------
 The Daleks are after you! Move carefully to make them crash into each other or other piles of trash. Don't let them get to you!
 
-This is based on the classic strategy game “Daleks”, a Macintosh game by Johan Strandberg (1984). I played an unofficial version on my Atari ST. In 2026 I wrote a new version for the ST as a desktop game.
+This is based on the classic strategy game "Daleks", a Macintosh game by Johan Strandberg (1984). I played an unofficial version on my Atari ST. In 2026 I wrote a new version for the ST as a desktop game.
 
-The Jupiter ACE version keeps the standard round-based gameplay. Move with the keys, trigger a teleport to a random location with T or announce your last stand for the level with L. B will crush all enemies near you with your trusty baseball bat. If you know a certain long-running British sci-fi show well, you should guess why I had to swap the Sonic Screwdriver for a baseball bat in a Daleks port to the Jupiter ACE.
+The Jupiter ACE version keeps the standard round-based gameplay. Move with the keys, trigger a teleport to a random location with <T> or announce your last stand for the level with <L>. <B> will crush all enemies near you with your trusty baseball bat. If you know a certain long-running British sci-fi show well, you should guess why I had to swap the Sonic Screwdriver for a baseball bat in a Daleks port to the Jupiter ACE.
 
 This is an example game for my Atari ST Jupiter ACE emulator ACE ST (https://mia-jaap.de/software).
 
@@ -18,7 +18,7 @@ You'll see the Daleks title screen. Press any key to play.
 
 2. Tape
 
-Press Control+O, or Undo → Tape, and pick examples/DALEKS.TAP.
+Press Control+O, or Undo > Load Tape..., and pick examples/DALEKS.TAP.
 At the Ace prompt, type load daleks and press Return. The tape name is lower case and must match exactly.
 Type daleks and press Return.
 
