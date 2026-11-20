@@ -16,6 +16,7 @@
         xdef    _gk_down,_gk_ring,_gk_rin,_gk_hooked,_gk_flush030,_gk_flush040
         xdef    _ace_mem,_ace_state,_ace_ram_last,_ace_ticks200,_ace_shadow
         xdef    _ace_tapename,_ace_snap_buf,_ace_snap_read
+        xdef    _ace_joy_map,_ace_keyname,_kernel_tape_close
         xref    _gem_frame
 
 _kernel_start:
@@ -94,6 +95,14 @@ kr_leave:
 ; sound comes in a later version
 host_snd_on:
 host_snd_off:
+        rts
+
+; void kernel_tape_close(void): before a new tape name (between frames, so
+; no tape operation is running)
+_kernel_tape_close:
+        movem.l d2-d7/a2-a6,-(sp)
+        jsr     tape_close
+        movem.l (sp)+,d2-d7/a2-a6
         rts
 
 ; int ace_snap_read(const char *name): 0 fine, -1 cannot read, -2 not a
@@ -292,6 +301,8 @@ _ace_ticks200   equ     ticks200
 _ace_shadow     equ     shadow
 _ace_tapename   equ     tapename
 _ace_snap_buf   equ     snap_buf
+_ace_joy_map    equ     joy_map
+_ace_keyname    equ     keyname
 
         include "kdata.s"
 

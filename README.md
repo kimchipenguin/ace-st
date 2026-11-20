@@ -195,6 +195,12 @@ file` (.ace snapshot), `#ram n`, `#noerr`. It is also handy for trying out Forth
   `game.txt` and `daleks.txt` run as for ACE.PRG. Checked so far: TOS 1.04 mono (prompt, typing,
   Ace Invaders, Daleks, Control+Q), TOS 2.06 STE medium, Falcon TOS 4.04 (68030: the `move ccr`
   patch), EmuTOS 16 colours 1024x768 (`--vdi-planes 4 --vdi-width 1024 --vdi-height 768`).
+- ACEGEM menus: `gemmenu.txt` (`EXTRA=ACEGEM.RSC`; EXTRA paths must not contain blanks, so give
+  it relative to the project): ^S, ^W, ^T, ^P twice, ^R, ^Q; then look at `SCNSHT` and
+  `ACEGEM.INF` in `test/hd/<name>`. `gemtape.txt` (`TAPE=/dev/null EXTRA="INVADERS ACEGEM.RSC"`)
+  and `gemsnap.txt` (`EXTRA="DALEKS.ACE ACEGEM.RSC"`) type a name into the file selector; the
+  rig's `type` sends "." as Alt+M (Ace Symbol Shift), so a file name's dot goes as `key 0x34`.
+  The RAM popup, its alert and the About box need the mouse: tested by hand.
 - A STATS build (`-DSTATS`) shows frames, event ticks and drawing ticks per second in the window
   title. Hatari's `--trace cpu_exception` names the PC of a bomb (it found a wrong XBIOS number).
 
@@ -221,15 +227,23 @@ dialog) belongs next to ACE.PRG too; `make rsc` rebuilds it and `src/rsc.i` from
 ### ACEGEM.APP (GEM version, in progress)
 
 ```
-make gem                             # -> ACEGEM.APP (needs m68k-atari-mint-gcc)
+make gem                             # -> ACEGEM.APP and ACEGEM.RSC (needs m68k-atari-mint-gcc, CF-Lib, zlib)
 ```
 
 A GEM application for any resolution and colour depth, also under MagiC and MiNT: the Ace
-screen in a window at the largest integer scale that fits. `ACE.ROM` is read from the current
-directory (next to the program when started from the desktop). Control+Q quits. The Ace runs only while its window is on top. The
-keyboard comes from an XBRA hook on the IKBD vector while the window is on top (TOS keeps the
-mouse); on machines without an ACIA (MagiC Mac/PC) AES key events stand in. 68000 to 68060;
-on ColdFire it says so and quits. No menus, sound or full screen yet.
+screen in a window at the largest integer scale that fits. `ACEGEM.RSC` and `ACE.ROM` belong
+next to it. The Ace runs only while its window is on top. The keyboard comes from an XBRA hook
+on the IKBD vector while the window is on top (TOS keeps the mouse); on machines without an
+ACIA (MagiC Mac/PC) AES key events stand in. 68000 to 68060; on ColdFire it says so and quits.
+
+Menus and shortcuts: File > Open tape... **^O** (the tape for the next `LOAD`/`SAVE`), Load
+snapshot... **^L** (.ace), Save screenshot **^T** (`SCNSHT\SHOTnnnn.PNG`, 256x192, 1 bit),
+Quit **^Q**; Emulation > Reset **^R**, Pause **^P**; Options > Settings... **^S** (RAM size,
+which resets the Ace, and the joystick keys, by their ACE.INF names); **^W** closes a dialog.
+A menu entry or shortcut runs once all keys are up and the hook is out, so alerts, dialogs and
+file selectors get a keyboard TOS knows about. `ACEGEM.INF` (next to the program, written at
+Quit) keeps `RAM` and `JOYSTICK` as in ACE.INF, plus `WINDOW`, `SETTINGS`, `ABOUT`, `TAPES` and
+`SNAPSHOTS` (the file selectors' folders). No sound or full screen yet.
 
 ## Layout
 
@@ -262,6 +276,8 @@ front end.
 | `src/main.s` | Startup, logo screen, IKBD and Timer C handlers, sound hooks (YM), Help keyboard picture, data |
 | `gem/glue.s` | ACEGEM: the kernel plus C wrappers, Timer C and IKBD hooks (XBRA "AceG") |
 | `gem/acegem.c`, `gem/kernel.h` | ACEGEM front end: window, VDI drawing, keys, frame loop |
+| `gem/aesfix.c` | ACEGEM: CF-Lib USERDEFs on an own stack, no BACKDROP gadget on old AES (from the CHIP-8 emulator) |
+| `tools/mkgemrsc.py` | Writes `ACEGEM.RSC` and `gem/build/acegem_rsc.h` (menu, Settings, About, RAM popup, texts) |
 | `tools/flagtab.py` | ACEGEM: the `GETF` sites from the first pass's listing (`gem/build/flagtab.i`); on a 68010+ they are patched to `move ccr` |
 | `tools/logo.sh` | Renders the logo in `assets/Jupiter ACE Logo.pdf` to `assets/logo.pbm` (448x103, 1 bit; needs Ghostscript and ImageMagick); `make` turns it into `src/logo.bin` |
 | `tools/kbpic.py` | Converts `assets/keyboardJupiterAce.bmp` (EightyOne) to `src/kbpic.bin` (1 bit, 512x223) |

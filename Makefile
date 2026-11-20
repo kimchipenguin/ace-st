@@ -71,7 +71,7 @@ run: ACE.PRG
 CROSS   ?= m68k-atari-mint-
 GB       = gem/build
 GVFLAGS  = -Faout -mid=0 -m68000 -quiet -DGEMAPP -Isrc/kernel -I$(GB)
-GCFLAGS  = -m68000 -O2 -fomit-frame-pointer -Wall -Igem
+GCFLAGS  = -m68000 -O2 -fomit-frame-pointer -Wall -Igem -I$(GB)
 KSRCS    = gem/glue.s $(wildcard src/kernel/*.s) src/kernel/kernel.i src/kernel/host.i
 
 gem: ACEGEM.APP
@@ -86,12 +86,16 @@ $(GB)/flagtab.i: $(GB)/glue1.lst tools/flagtab.py
 $(GB)/glue.o: $(KSRCS) $(GB)/flagtab.i
 	$(VASM) $(GVFLAGS) -DFLAGTAB -o $@ gem/glue.s
 
-$(GB)/%.o: gem/%.c gem/kernel.h
+ACEGEM.RSC $(GB)/acegem_rsc.h: tools/mkgemrsc.py
+	@mkdir -p $(GB)
+	python3 tools/mkgemrsc.py ACEGEM.RSC $(GB)/acegem_rsc.h
+
+$(GB)/%.o: gem/%.c gem/kernel.h gem/aesfix.h $(GB)/acegem_rsc.h
 	@mkdir -p $(GB)
 	$(CROSS)gcc $(GCFLAGS) -c $< -o $@
 
-ACEGEM.APP: $(GB)/glue.o $(GB)/acegem.o
-	$(CROSS)gcc -m68000 -o $@ $(GB)/acegem.o $(GB)/glue.o -lgem
+ACEGEM.APP: $(GB)/glue.o $(GB)/acegem.o $(GB)/aesfix.o ACEGEM.RSC
+	$(CROSS)gcc -m68000 -Wl,--wrap=mt_wind_create_grect -o $@ $(GB)/acegem.o $(GB)/aesfix.o $(GB)/glue.o -lcflib -lgem -lz
 	$(CROSS)strip $@
 	$(CROSS)stack -s --size=32768 $@ >/dev/null
 	$(CROSS)flags -S $@ >/dev/null

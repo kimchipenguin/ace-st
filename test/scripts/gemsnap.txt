@@ -1,0 +1,15 @@
+# Control+L snapshot selector: load DALEKS.ACE
+wait 18
+down 0x1d
+key 0x26
+up 0x1d
+wait 3
+key 0x01
+type daleks
+key 0x34
+type ace
+wait 1
+shot
+key 0x1c
+wait 5
+shot

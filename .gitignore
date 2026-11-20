@@ -16,3 +16,7 @@ testgame/
 # GEM version build outputs
 *.APP
 gem/build/
+
+# written by ACEGEM runs in the project folder (ARAnyM)
+[Aa][Cc][Ee][Gg][Ee][Mm].[Ii][Nn][Ff]
+[Ss][Cc][Nn][Ss][Hh][Tt]/

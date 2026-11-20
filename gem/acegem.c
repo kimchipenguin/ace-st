@@ -14,15 +14,28 @@
  * Without the 6850 ACIA (MagiC Mac/PC) the keys come as AES events and
  * count as held for a little while.
  *
+ * Menus and shortcuts: what the user picks waits in "pending" until the
+ * hook is out (all keys up), then runs from gem_frame(); so alerts, file
+ * selectors and dialogs always get a keyboard TOS knows about.  The Ace
+ * waits while another window (a dialog) is on top, or while it is paused.
+ *
  * GPL v2 or later.
  */
 
 #include <gem.h>
+#include <cflib.h>
 #include <mint/osbind.h>
 #include <mint/cookie.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <zlib.h>
 #include "kernel.h"
+#include "aesfix.h"
+#include "acegem_rsc.h"
+
+#define RSC_FILE "ACEGEM.RSC"
+#define INF_FILE "ACEGEM.INF"
 
 #define ACE_W   256
 #define ACE_H   192
@@ -33,12 +46,15 @@
 #define SC_LSH  0x2A
 #define SC_ALT  0x38
 
-static short ap_id, vh, win = -1;
+/* actions that are no menu entry */
+#define ACT_RAMRESET    1000        /* new RAM size: reset */
+#define ACT_CLOSEW      1001        /* Control+W: close the dialog on top */
+
+static short vh, win = -1;
 static short win_kind = NAME | CLOSER | MOVER | FULLER | SIZER;
 static short pix_w = 1, pix_h = 1;          /* pixel shape, work_out[3/4] */
-static GRECT desk, wwork, wfull_old;
+static GRECT desk, wwork, wfull_old, win_place;
 static short fulled;
-static char win_title[] = " ACEGEM ";
 
 /* the picture: a one-plane bitmap, ACE_W * sx by ACE_H * sy */
 static short sx, sy;                        /* 0 = does not fit */
@@ -56,15 +72,37 @@ static long key_quiet;                      /* last AES key (ticks) */
 static short want_quit;
 static short skip;                          /* frames not drawn */
 static short ev_div;
+static short pending;                       /* menu item to do, 0 = none */
+static short paused;
+static long title_until;                    /* "saved" in the title until */
+static char title_buf[64];
+
+static OBJECT *menu, *dialog, *abouttree, *rampop;
+extern OBJECT *cf_alert_box;                /* CF-Lib's alert tree */
+static WDIALOG *wd, *wd_about;
+static short dlg_x = -1, dlg_y = -1, abt_x = -1, abt_y = -1;
+static char *key_text[5];                   /* the joystick key fields */
+static short ram_new;                       /* RAM size for ACT_RAMRESET */
+
+static char inf_path[300];
+static char tape_path[300], snap_path[300]; /* file selector folders */
 
 static long ticks(void)
 {
 	return ace_ticks200;
 }
 
-static void alert(const char *s)
+static char *rs_str(short i)
 {
-	form_alert(1, s);
+	char **p = NULL;
+
+	rsrc_gaddr(R_FRSTR, i, &p);
+	return p ? *p : "";
+}
+
+static short alert(short i)
+{
+	return do_walert(1, 1, rs_str(i), rs_str(FS_WINTITLE));
 }
 
 /* ---------------------------------------------------------------- */
@@ -362,6 +400,26 @@ static void show_changes(void)
 /* the window                                                        */
 /* ---------------------------------------------------------------- */
 
+static void set_title(void)
+{
+#ifndef STATS
+	char *t = paused ? rs_str(FS_PAUSED) : title_until ? title_buf : rs_str(FS_WINTITLE);
+
+	if (win >= 0)
+		wind_set_str(win, WF_NAME, t);
+#endif
+}
+
+static void clamp_to_desk(GRECT *r)
+{
+	if (r->g_w > desk.g_w) r->g_w = desk.g_w;
+	if (r->g_h > desk.g_h) r->g_h = desk.g_h;
+	if (r->g_x + r->g_w > desk.g_x + desk.g_w) r->g_x = desk.g_x + desk.g_w - r->g_w;
+	if (r->g_y + r->g_h > desk.g_y + desk.g_h) r->g_y = desk.g_y + desk.g_h - r->g_h;
+	if (r->g_x < desk.g_x) r->g_x = desk.g_x;
+	if (r->g_y < desk.g_y) r->g_y = desk.g_y;
+}
+
 static void set_border(GRECT *b)
 {
 	GRECT old = wwork;
@@ -381,35 +439,53 @@ static void set_border(GRECT *b)
 	}
 }
 
+/* at its place from ACEGEM.INF, else at the largest scale that fits on
+   the desktop, centred */
 static int open_window(void)
 {
 	GRECT b, w;
 	short px, py;
 
-	wind_get(0, WF_WORKXYWH, &desk.g_x, &desk.g_y, &desk.g_w, &desk.g_h);
-	/* the largest scale that fits on the desktop */
-	wind_calc(WC_WORK, win_kind, desk.g_x, desk.g_y, desk.g_w, desk.g_h,
-	          &w.g_x, &w.g_y, &w.g_w, &w.g_h);
-	fit_scale(w.g_w, w.g_h, &px, &py);
-	if (px == 0)
-		px = py = 1;
-	wind_calc(WC_BORDER, win_kind, 0, 0, ACE_W * px, ACE_H * py,
-	          &b.g_x, &b.g_y, &b.g_w, &b.g_h);
-	if (b.g_w > desk.g_w)
-		b.g_w = desk.g_w;
-	if (b.g_h > desk.g_h)
-		b.g_h = desk.g_h;
-	b.g_x = desk.g_x + (desk.g_w - b.g_w) / 2;
-	b.g_y = desk.g_y + (desk.g_h - b.g_h) / 2;
-
+	if (win_place.g_w > 0) {
+		b = win_place;
+		clamp_to_desk(&b);
+	} else {
+		wind_calc(WC_WORK, win_kind, desk.g_x, desk.g_y, desk.g_w, desk.g_h,
+		          &w.g_x, &w.g_y, &w.g_w, &w.g_h);
+		fit_scale(w.g_w, w.g_h, &px, &py);
+		if (px == 0)
+			px = py = 1;
+		wind_calc(WC_BORDER, win_kind, 0, 0, ACE_W * px, ACE_H * py,
+		          &b.g_x, &b.g_y, &b.g_w, &b.g_h);
+		if (b.g_w > desk.g_w)
+			b.g_w = desk.g_w;
+		if (b.g_h > desk.g_h)
+			b.g_h = desk.g_h;
+		b.g_x = desk.g_x + (desk.g_w - b.g_w) / 2;
+		b.g_y = desk.g_y + (desk.g_h - b.g_h) / 2;
+	}
 	win = wind_create(win_kind, desk.g_x, desk.g_y, desk.g_w, desk.g_h);
 	if (win < 0)
 		return 0;
-	wind_set_str(win, WF_NAME, win_title);
+	set_title();
 	wind_open(win, b.g_x, b.g_y, b.g_w, b.g_h);
 	wind_get(win, WF_WORKXYWH, &wwork.g_x, &wwork.g_y, &wwork.g_w, &wwork.g_h);
 	set_scale();
 	return 1;
+}
+
+static void close_window(void)
+{
+	if (win < 0)
+		return;
+	if (fulled)
+		win_place = wfull_old;
+	else
+		wind_get(win, WF_CURRXYWH, &win_place.g_x, &win_place.g_y,
+		         &win_place.g_w, &win_place.g_h);
+	wind_close(win);
+	wind_delete(win);
+	win = -1;
 }
 
 static int on_top(void)
@@ -468,6 +544,29 @@ static void keys_manage(int want)
 	}
 }
 
+/* Control + the key with this character: a menu entry, done when the
+   keys are up (the letter, not the key position, so it also works on
+   AZERTY keyboards) */
+static void ctrl_key(short ch)
+{
+	short item = 0;
+
+	if (ch >= 0x01 && ch <= 0x1A)
+		ch += 0x60;
+	switch (ch | 0x20) {
+	case 'q': want_quit = 1; return;
+	case 'o': item = MI_TAPE; break;
+	case 'l': item = MI_SNAP; break;
+	case 't': item = MI_SHOT; break;
+	case 'r': item = MI_RESET; break;
+	case 'p': item = MI_PAUSE; break;
+	case 's': item = MI_SETTINGS; break;
+	case 'w': item = ACT_CLOSEW; break;
+	}
+	if (item && !pending)
+		pending = item;
+}
+
 /* an AES key event (not hooked): the Ace sees it held for a while */
 static void aes_key(short kstate, short kreturn)
 {
@@ -475,12 +574,7 @@ static void aes_key(short kstate, short kreturn)
 	long now = ticks();
 
 	key_quiet = now;
-	if (kstate & K_CTRL) {
-		if (sc == SC_Q)
-			want_quit = 1;
-		return;
-	}
-	if (!on_top() || sc == 0)
+	if (paused || !on_top() || sc == 0)
 		return;
 	held_until[sc] = now + (held_until[sc] > now ? hold_next : hold_first);
 	kernel_key(sc);
@@ -506,17 +600,614 @@ static void aes_keys_expire(void)
 		}
 }
 
+/* Control + key from the hook: its letter from the keyboard table */
 static void ring_keys(void)
 {
 	static unsigned char rout;
 
 	while (rout != gk_rin) {
 		unsigned char sc = gk_ring[rout];
+		_KEYTAB *kt = (_KEYTAB *)Keytbl((void *)-1, (void *)-1, (void *)-1);
 
 		rout = (rout + 1) & 15;
 		if (sc == SC_Q)
 			want_quit = 1;
+		else if (kt && sc < 128)
+			ctrl_key((unsigned char)kt->unshift[sc]);
 	}
+}
+
+/* the name of an Ace key (ST scancode) without blanks, as in ACE.INF */
+static void key_name(short sc, char *out)
+{
+	const char *k = ace_keyname[sc & 127];
+	short i;
+
+	for (i = 0; i < 3; i++)
+		if (k[i] && k[i] != ' ')
+			*out++ = k[i];
+	*out = 0;
+}
+
+/* the scancode of an Ace key name, -1 = none */
+static short key_find(const char *t)
+{
+	char want[8], have[8];
+	short i, n = 0;
+
+	for (; *t && n < 7; t++)
+		if (*t != ' ')
+			want[n++] = (*t >= 'a' && *t <= 'z') ? *t - 32 : *t;
+	want[n] = 0;
+	if (!n)
+		return -1;
+	for (i = 0; i < 128; i++) {
+		key_name(i, have);
+		if (have[0] && strcmp(have, want) == 0)
+			return i;
+	}
+	return -1;
+}
+
+/* ---------------------------------------------------------------- */
+/* dialogs (CF-Lib window dialogs, as in the CHIP-8 emulator)        */
+/* ---------------------------------------------------------------- */
+
+/* The rows of a dialog get their places here, so that buttons are at
+   least 17 pixels high and labels sit in the middle of their row, in every
+   resolution: object 1 is the title, then come the group frames (their
+   objects in the rows of the RSC, 1 = first), one below the other, and
+   the other objects of the root (the buttons) in a row at the bottom. */
+static int is_frame(OBJECT *t, short i)
+{
+	return (t[i].ob_type & 0xFF) == G_BUTTON && (t[i].ob_state & 0xFF00) == 0xFE00;
+}
+
+static short btn_h(void)
+{
+	return gl_hchar + 2 < 17 ? 17 : gl_hchar + 2;
+}
+
+static short row_h(void)
+{
+	return btn_h() + (gl_hchar >= 16 ? gl_hchar / 4 : 1);
+}
+
+/* the objects of frame i in their rows (ob_y holds the row number, 0 =
+   first), and the height of the frame.  Rows with edit fields are taller:
+   half a character between the borders of fields below each other. */
+static void frame_rows(OBJECT *t, short i, short rows)
+{
+	short bh = btn_h(), rh = row_h();
+	short ft = gl_hchar + gl_hchar / 4;     /* frame title */
+	short o;
+
+	for (o = t[i].ob_head; o != i && o >= 0; o = t[o].ob_next)
+		if (t[o].ob_flags & OF_EDITABLE) {
+			if (rh < gl_hchar + gl_hchar / 2 + 4)
+				rh = gl_hchar + gl_hchar / 2 + 4;
+			break;
+		}
+	for (o = t[i].ob_head; o != i && o >= 0; o = t[o].ob_next) {
+		short type = t[o].ob_type & 0xFF;
+		short h = type == G_BUTTON ? bh : gl_hchar;
+
+		t[o].ob_height = h;
+		t[o].ob_y = ft + t[o].ob_y * rh + (rh - h) / 2;
+	}
+	t[i].ob_height = ft + rows * rh + 2;
+}
+
+static void layout_dialog(OBJECT *t)
+{
+	short bh = btn_h();
+	short gap = gl_hchar / 2;
+	short y, i, o, row;
+
+	/* the title: one character from every edge (CF-Lib hides it, it is
+	   the name of the window) */
+	t[1].ob_x = gl_wchar;
+	t[1].ob_y = gl_hchar;
+	t[1].ob_width = t[ROOT].ob_width - 2 * gl_wchar;
+	t[1].ob_height = gl_hchar + 2;
+	y = t[1].ob_y + t[1].ob_height + gl_hchar;
+
+	for (i = t[ROOT].ob_head; i != ROOT && i >= 0; i = t[i].ob_next) {
+		short rows = 0, shadow = 0;
+
+		if (!is_frame(t, i))
+			continue;
+		for (o = t[i].ob_head; o != i && o >= 0; o = t[o].ob_next) {
+			row = t[o].ob_y / gl_hchar - 1;         /* row from the RSC */
+			if (row + 1 > rows)
+				rows = row + 1;
+			t[o].ob_y = row;                        /* for the next loop */
+			if (t[o].ob_state & OS_SHADOWED)
+				shadow = 1;
+		}
+		frame_rows(t, i, rows);
+		t[i].ob_y = y;
+		if (shadow)                             /* popups: room for the */
+			t[i].ob_height += gl_hchar / 2;     /* shadow above the frame */
+		y += t[i].ob_height + gap;
+	}
+	y += gap;
+	for (i = t[ROOT].ob_head; i != ROOT && i >= 0; i = t[i].ob_next)
+		if (i != 1 && !is_frame(t, i)) {
+			t[i].ob_y = y;
+			t[i].ob_height = bh;
+		}
+	t[ROOT].ob_height = y + bh + gl_hchar;
+}
+
+/* a dialog window, given by the place of its work area (what
+   open_wdial() takes), inside the desktop; the title object is not shown */
+static void clamp_dialog(OBJECT *t, short *x, short *y)
+{
+	const short k = NAME | MOVER | CLOSER;
+	GRECT w, o;
+
+	if (*x < 0 || *y < 0)
+		return;
+	w.g_x = *x;
+	w.g_y = *y;
+	w.g_w = t[ROOT].ob_width;
+	w.g_h = t[ROOT].ob_height - (t[1].ob_y + t[1].ob_height);
+	wind_calc(WC_BORDER, k, w.g_x, w.g_y, w.g_w, w.g_h, &o.g_x, &o.g_y, &o.g_w, &o.g_h);
+	clamp_to_desk(&o);
+	wind_calc(WC_WORK, k, o.g_x, o.g_y, o.g_w, o.g_h, &w.g_x, &w.g_y, &w.g_w, &w.g_h);
+	*x = w.g_x;
+	*y = w.g_y;
+}
+
+/* a non-modal dialog on top? */
+static int wdial_top(WDIALOG *d)
+{
+	short t, x;
+
+	if (!d || d->mode != WD_OPEN)
+		return 0;
+	wind_get(0, WF_TOP, &t, &x, &x, &x);
+	return t == d->win_handle;
+}
+
+/* open a non-modal dialog: again where it was, at the place from
+   ACEGEM.INF, or centred */
+static WDIALOG *open_dialog(WDIALOG **d, OBJECT *tree, short edit,
+                            WDIAL_XCB exit_cb, short x, short y)
+{
+	if (!*d) {
+		*d = create_wdial(tree, NULL, edit, WOCB_NULL, exit_cb);
+		if (!*d)
+			return NULL;
+	}
+	if ((*d)->win_handle > 0 || x < 0 || y < 0)
+		open_wdial(*d, -1, -1);
+	else {
+		clamp_dialog(tree, &x, &y);
+		open_wdial(*d, x, y);
+	}
+	return *d;
+}
+
+/* the entry of a popup that its box shows */
+static short popup_choice(short box, OBJECT *pop)
+{
+	char s[32], t[32];
+	short i;
+
+	get_string(dialog, box, s);
+	for (i = pop[ROOT].ob_head; i != ROOT && i >= 0; i = pop[i].ob_next) {
+		get_string(pop, i, t);
+		if (strcmp(s, t) == 0)
+			return i - pop[ROOT].ob_head;
+	}
+	return 0;
+}
+
+static void popup_show(short box, OBJECT *pop, short entry)
+{
+	char s[32];
+
+	get_string(pop, pop[ROOT].ob_head + entry, s);
+	set_string(dialog, box, s);
+}
+
+/* ---------------------------------------------------------------- */
+/* Settings: RAM size (with a reset) and the joystick keys           */
+/* ---------------------------------------------------------------- */
+
+static const short key_obj[5] = { D_KUP, D_KDOWN, D_KLEFT, D_KRIGHT, D_KFIRE };
+
+static short ram_index(void)
+{
+	return (ace_ram_last >> 14) & 3;
+}
+
+static void settings_fill(void)
+{
+	short i;
+
+	popup_show(D_RAM, rampop, ram_index());
+	for (i = 0; i < 5; i++)
+		key_name(ace_joy_map[i], key_text[i]);
+}
+
+/* the key fields into the joystick map; a name that is no Ace key keeps
+   the key it had */
+static void settings_read(void)
+{
+	short i, sc;
+
+	if (!wd || wd->mode != WD_OPEN)
+		return;
+	for (i = 0; i < 5; i++) {
+		sc = key_find(key_text[i]);
+		if (sc >= 0)
+			ace_joy_map[i] = sc;
+	}
+}
+
+static int settings_exit(WDIALOG *d, short obj)
+{
+	short old, n;
+
+	(void)d;
+	obj &= 0x7FFF;                      /* bit 15: double click */
+	switch (obj) {
+	case D_RAM:
+	case D_RAMLBL:
+		old = ram_index();
+		handle_popup(dialog, D_RAM, rampop, ROOT, obj == D_RAM ? POP_OPEN : POP_CYCLE);
+		n = popup_choice(D_RAM, rampop);
+		if (n != old) {
+			if (do_walert(1, 2, rs_str(AL_RAM), rs_str(FS_WINTITLE)) == 1) {
+				ram_new = n;
+				pending = ACT_RAMRESET;
+			} else {
+				popup_show(D_RAM, rampop, old);
+				redraw_wdobj(wd, D_RAM);
+			}
+		}
+		return 0;
+	case D_CLOSE:
+	case WD_CLOSER:
+		settings_read();
+		if (wd->win_handle > 0) {
+			dlg_x = wd->work.g_x;
+			dlg_y = wd->work.g_y;
+		}
+		return 1;
+	}
+	return 0;
+}
+
+static void settings(void)
+{
+	settings_fill();
+	open_dialog(&wd, dialog, D_KUP, settings_exit, dlg_x, dlg_y);
+}
+
+static int about_exit(WDIALOG *d, short obj)
+{
+	(void)obj;
+	if (d->win_handle > 0) {
+		abt_x = d->work.g_x;
+		abt_y = d->work.g_y;
+	}
+	return 1;                           /* OK, Undo or the closer: close */
+}
+
+static void about(void)
+{
+	open_dialog(&wd_about, abouttree, 0, about_exit, abt_x, abt_y);
+}
+
+/* ---------------------------------------------------------------- */
+/* files                                                             */
+/* ---------------------------------------------------------------- */
+
+/* the folder the program was started from (where ACEGEM.INF is), with a
+   backslash at the end */
+static void app_folder(char *out)
+{
+	char *p;
+
+	strcpy(out, inf_path);
+	p = strrchr(out, '\\');
+	if (p)
+		p[1] = 0;
+}
+
+/* the file selector; path keeps its folder and mask */
+static int choose(char *path, char *name, short title, const char *mask, char *full)
+{
+	short button = 0, ok;
+	char *p;
+
+	if (!path[0]) {
+		app_folder(path);
+		strcat(path, mask);
+	}
+	if (_AESversion >= 0x140)
+		ok = fsel_exinput(path, name, &button, rs_str(title));
+	else
+		ok = fsel_input(path, name, &button);
+	if (!ok || !button || name[0] == 0)
+		return 0;
+	strcpy(full, path);
+	p = strrchr(full, '\\');
+	if (p)
+		p[1] = 0;
+	else
+		full[0] = 0;
+	strcat(full, name);
+	return 1;
+}
+
+/* File > Open tape: the tape for the next LOAD / SAVE (a new name makes
+   a new, empty tape, as in ACE.PRG) */
+static void open_tape(void)
+{
+	static char name[16];
+	char full[300];
+
+	if (!choose(tape_path, name, FS_FSEL_TAPE, "*.*", full))
+		return;
+	if (strlen(full) >= 169)
+		return;
+	kernel_tape_close();
+	strcpy(ace_tapename, full);
+}
+
+/* File > Load snapshot: 1 = read, the kernel starts it */
+static int load_snap(void)
+{
+	static char name[16];
+	char full[300];
+	int r;
+
+	if (!choose(snap_path, name, FS_FSEL_SNAP, "*.ACE", full))
+		return 0;
+	graf_mouse(BUSYBEE, NULL);
+	r = ace_snap_read(full);
+	graf_mouse(ARROW, NULL);
+	if (r == 0)
+		return 1;
+	alert(r == -2 ? AL_NOSNAP : r == -3 ? AL_NOMEM : AL_NOFILE);
+	return 0;
+}
+
+/* screenshot: the Ace screen as a 1-bit PNG, 256 x 192, in SCNSHT\ next
+   to the program (SHOT0001.PNG, ...) */
+#define SHOT_ROW (1 + ACE_W / 8)            /* filter byte + pixels */
+
+static void be32(unsigned char *p, unsigned long v)
+{
+	p[0] = v >> 24; p[1] = v >> 16; p[2] = v >> 8; p[3] = v;
+}
+
+static int png_chunk(short fh, const char *type, const unsigned char *data,
+                     unsigned long len)
+{
+	unsigned char head[8], crc[4];
+	unsigned long sum;
+
+	be32(head, len);
+	memcpy(head + 4, type, 4);
+	sum = crc32(0L, head + 4, 4);
+	if (len)
+		sum = crc32(sum, data, len);
+	be32(crc, sum);
+	return Fwrite(fh, 8, head) == 8 &&
+	       (!len || Fwrite(fh, len, data) == (long)len) &&
+	       Fwrite(fh, 4, crc) == 4;
+}
+
+static int shot_write(const char *name)
+{
+	static const unsigned char sig[8] = { 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n' };
+	static const unsigned char plte[6] = { 0, 0, 0, 255, 255, 255 };
+	static unsigned char raw[ACE_H * SHOT_ROW], packed[ACE_H * SHOT_ROW + 1024];
+	const unsigned char *vram = ace_mem + 0x2400, *cram = ace_mem + 0x2C00;
+	unsigned char ihdr[13], *r = raw;
+	uLongf plen = sizeof packed;
+	short y, x;
+	long fh;
+	int ok;
+
+	for (y = 0; y < ACE_H; y++) {
+		*r++ = 0;                           /* no filter */
+		for (x = 0; x < 32; x++) {
+			unsigned char c = vram[(y >> 3) * 32 + x];
+
+			*r++ = cram[(c & 0x7F) * 8 + (y & 7)] ^ ((c & 0x80) ? 0xFF : 0);
+		}
+	}
+	if (compress2(packed, &plen, raw, sizeof raw, Z_BEST_COMPRESSION) != Z_OK)
+		return 0;
+	be32(ihdr, ACE_W);
+	be32(ihdr + 4, ACE_H);
+	ihdr[8] = 1;                            /* 1 bit a pixel */
+	ihdr[9] = 3;                            /* with a palette */
+	ihdr[10] = ihdr[11] = ihdr[12] = 0;
+
+	fh = Fcreate(name, 0);
+	if (fh < 0)
+		return 0;
+	ok = Fwrite((short)fh, 8, sig) == 8 &&
+	     png_chunk((short)fh, "IHDR", ihdr, 13) &&
+	     png_chunk((short)fh, "PLTE", plte, 6) &&
+	     png_chunk((short)fh, "IDAT", packed, plen) &&
+	     png_chunk((short)fh, "IEND", NULL, 0);
+	if (Fclose((short)fh) < 0)
+		ok = 0;
+	if (!ok)
+		Fdelete(name);
+	return ok;
+}
+
+static void screenshot(void)
+{
+	char path[300], *p;
+	_DTA dta, *old;
+	short l, num = 0, v;
+
+	app_folder(path);
+	strcat(path, rs_str(FS_SHOTDIR));
+	Dcreate(path);                      /* fails if it is there: fine */
+	strcat(path, "\\");
+	l = strlen(path);
+
+	/* the next number after the highest SHOTnnnn.PNG */
+	strcpy(path + l, "SHOT*.PNG");
+	old = Fgetdta();
+	Fsetdta(&dta);
+	if (Fsfirst(path, 0) == 0)
+		do {
+			p = dta.dta_name;
+			if ((p[0] == 'S' || p[0] == 's') && p[4] >= '0' && p[4] <= '9') {
+				v = atoi(p + 4);
+				if (v > num)
+					num = v;
+			}
+		} while (Fsnext() == 0);
+	Fsetdta(old);
+	if (num >= 9999) {
+		alert(AL_SHOT);
+		return;
+	}
+	sprintf(path + l, "SHOT%04d.PNG", num + 1);
+	graf_mouse(BUSYBEE, NULL);
+	v = shot_write(path);
+	graf_mouse(ARROW, NULL);
+	if (!v) {
+		alert(AL_SHOT);
+		return;
+	}
+	/* the name in the title for 3 seconds */
+	snprintf(title_buf, sizeof title_buf, "%s%s ", rs_str(FS_SHOTSAVED), path + l);
+	title_until = ticks() + 600;
+	set_title();
+}
+
+/* ACEGEM.INF: RAM and JOYSTICK as in ACE.INF, plus the places of the
+   windows and the folders of the file selectors */
+static void inf_load(void)
+{
+	FILE *f = fopen(inf_path, "r");
+	char line[320], k[5][8];
+	int a, b, c, d;
+	short i;
+
+	if (!f)
+		return;
+	while (fgets(line, sizeof line, f)) {
+		char *nl = strpbrk(line, "\r\n");
+
+		if (nl)
+			*nl = 0;
+		if (sscanf(line, "RAM %dK", &a) == 1) {
+			for (i = 0; i < 4; i++)
+				if (a == 3 + 16 * i)
+					ace_ram_last = (i << 14) | 0x3FFF;
+		} else if (sscanf(line, "JOYSTICK %7s %7s %7s %7s %7s",
+		                  k[0], k[1], k[2], k[3], k[4]) == 5) {
+			for (i = 0; i < 5; i++) {
+				short sc = key_find(k[i]);
+
+				if (sc >= 0)
+					ace_joy_map[i] = sc;
+			}
+		} else if (sscanf(line, "WINDOW %d %d %d %d", &a, &b, &c, &d) == 4) {
+			win_place.g_x = a; win_place.g_y = b;
+			win_place.g_w = c; win_place.g_h = d;
+		} else if (sscanf(line, "SETTINGS %d %d", &a, &b) == 2) {
+			dlg_x = a; dlg_y = b;
+		} else if (sscanf(line, "ABOUT %d %d", &a, &b) == 2) {
+			abt_x = a; abt_y = b;
+		} else if (strncmp(line, "TAPES ", 6) == 0)
+			snprintf(tape_path, sizeof tape_path, "%.255s", line + 6);
+		else if (strncmp(line, "SNAPSHOTS ", 10) == 0)
+			snprintf(snap_path, sizeof snap_path, "%.255s", line + 10);
+	}
+	fclose(f);
+}
+
+static void inf_save(void)
+{
+	FILE *f = fopen(inf_path, "w");
+	char n[5][8];
+	short i;
+
+	if (!f)
+		return;
+	for (i = 0; i < 5; i++)
+		key_name(ace_joy_map[i], n[i]);
+	fprintf(f, "RAM %dK\n", 3 + 16 * ram_index());
+	fprintf(f, "JOYSTICK %s %s %s %s %s\n", n[0], n[1], n[2], n[3], n[4]);
+	if (win_place.g_w > 0)
+		fprintf(f, "WINDOW %d %d %d %d\n", win_place.g_x, win_place.g_y,
+		        win_place.g_w, win_place.g_h);
+	if (dlg_x >= 0)
+		fprintf(f, "SETTINGS %d %d\n", dlg_x, dlg_y);
+	if (abt_x >= 0)
+		fprintf(f, "ABOUT %d %d\n", abt_x, abt_y);
+	if (tape_path[0])
+		fprintf(f, "TAPES %s\n", tape_path);
+	if (snap_path[0])
+		fprintf(f, "SNAPSHOTS %s\n", snap_path);
+	fclose(f);
+}
+
+/* ---------------------------------------------------------------- */
+/* menu actions                                                      */
+/* ---------------------------------------------------------------- */
+
+/* one action, with the hook out; returns what the kernel is to do */
+static int do_action(short item)
+{
+	switch (item) {
+	case MI_ABOUT:
+		about();
+		break;
+	case MI_TAPE:
+		open_tape();
+		break;
+	case MI_SNAP:
+		if (load_snap())
+			return GF_SNAP;
+		break;
+	case MI_SHOT:
+		screenshot();
+		break;
+	case MI_QUIT:
+		want_quit = 1;
+		break;
+	case MI_RESET:
+		return GF_RESET;
+	case MI_PAUSE:
+		paused = !paused;
+		menu_icheck(menu, MI_PAUSE, paused);
+		set_title();
+		break;
+	case MI_SETTINGS:
+		settings();
+		break;
+	case ACT_RAMRESET:
+		ace_ram_last = (ram_new << 14) | 0x3FFF;
+		return GF_RESET;
+	case ACT_CLOSEW:
+		if (wdial_top(wd)) {
+			settings_exit(wd, D_CLOSE);
+			close_wdial(wd);
+		} else if (wdial_top(wd_about)) {
+			about_exit(wd_about, A_OK);
+			close_wdial(wd_about);
+		}
+		break;
+	}
+	return GF_GO;
 }
 
 /* ---------------------------------------------------------------- */
@@ -527,7 +1218,19 @@ static void message(short *msg)
 {
 	GRECT r;
 
-	if (msg[3] != win && msg[0] != AP_TERM)
+	switch (msg[0]) {
+	case MN_SELECTED:
+		if (!pending)
+			pending = msg[4];
+		menu_tnormal(menu, msg[3], 1);
+		return;
+	case AP_TERM:
+		want_quit = 1;
+		return;
+	}
+	if (message_wdial(msg))
+		return;
+	if (msg[3] != win)
 		return;
 	switch (msg[0]) {
 	case WM_REDRAW:
@@ -541,17 +1244,9 @@ static void message(short *msg)
 		wind_set(win, WF_TOP, 0, 0, 0, 0);
 		break;
 	case WM_CLOSED:
-	case AP_TERM:
 		want_quit = 1;
 		break;
 	case WM_MOVED:
-		r.g_x = msg[4];
-		r.g_y = msg[5];
-		r.g_w = msg[6];
-		r.g_h = msg[7];
-		fulled = 0;
-		set_border(&r);
-		break;
 	case WM_SIZED:
 		r.g_x = msg[4];
 		r.g_y = msg[5];
@@ -575,18 +1270,49 @@ static void message(short *msg)
 	}
 }
 
-/* one evnt_multi; block (paused) when wait */
+/* while a CF-Lib alert is open, it passes on the messages for our
+   windows: draw them again and follow moves */
+static void mdial_messages(short *msg)
+{
+	switch (msg[0]) {
+	case WM_REDRAW:
+	case WM_MOVED:
+	case WM_SIZED:
+		message(msg);
+		break;
+	}
+}
+
+/* one evnt_multi; wait (the Ace waits) blocks, but looks every 20 ms
+   while the hook is still going out */
 static void events(int wait)
 {
 	short msg[8], mx, my, mb, ks, kr, br, ev;
+	short timer = !wait || gk_hooked;
 
-	ev = evnt_multi(MU_MESAG | MU_KEYBD | (wait ? 0 : MU_TIMER),
-	                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	                msg, 0, &mx, &my, &mb, &ks, &kr, &br);
+	ev = evnt_multi(MU_MESAG | MU_KEYBD | (wait ? MU_BUTTON : 0) | (timer ? MU_TIMER : 0),
+	                0x102, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	                msg, wait ? 20 : 0, &mx, &my, &mb, &ks, &kr, &br);
 	if (ev & MU_MESAG)
 		message(msg);
-	if (ev & MU_KEYBD)
-		aes_key(ks, kr);
+	if (ev & MU_KEYBD) {
+		short ch = kr & 0xFF, sc = (kr >> 8) & 0xFF;
+		/* Control+letter gives the letter - 0x40 (some AES leave K_CTRL out) */
+		int ctrl = (ks & K_CTRL) || (ch >= 0x01 && ch <= 0x1A && sc != 0x1C &&
+		           sc != 0x72 && sc != 0x0E && sc != 0x0F);
+
+		if (ctrl) {
+			_KEYTAB *kt = (_KEYTAB *)Keytbl((void *)-1, (void *)-1, (void *)-1);
+
+			key_quiet = ticks();
+			if (!ch && kt && sc < 128)
+				ch = (unsigned char)kt->unshift[sc];
+			ctrl_key(ch);
+		} else if (!key_wdial(kr, ks))
+			aes_key(ks, kr);
+	}
+	if ((ev & MU_BUTTON) && (mb & 1))
+		click_wdial(br, mx, my, ks, mb);
 }
 
 #ifdef STATS
@@ -634,6 +1360,10 @@ int gem_frame(void)
 #endif
 	ring_keys();
 	aes_keys_expire();
+	if (title_until && ticks() >= title_until) {
+		title_until = 0;
+		set_title();
+	}
 	if (skip > 0)
 		skip--;
 	else if (!want_quit) {
@@ -650,16 +1380,34 @@ int gem_frame(void)
 	st_draw += ticks() - t;
 	t = ticks();
 #endif
+	/* a menu entry or shortcut: once the keys are up and the hook is out */
+	if (pending && !want_quit) {
+		keys_manage(0);
+		if (!gk_hooked) {
+			short item = pending;
+			int r;
+
+			pending = 0;
+			r = do_action(item);
+			if (r != GF_GO)
+				return r;
+		}
+	}
 	/* an evnt_multi costs some 5 ms on an 8 MHz ST: every third frame */
 	if (++ev_div >= 3 || want_quit) {
+		short waited = 0;
+
 		ev_div = 0;
 		events(0);
-		/* not on top (a dialog, another program): the Ace waits */
-		while (!want_quit && !on_top()) {
+		/* paused, or not on top (a dialog, another program): the Ace waits */
+		while (!want_quit && !pending && (paused || !on_top())) {
 			keys_manage(0);
 			events(1);
+			waited = 1;
 		}
-		if (!want_quit)
+		if (waited)
+			settings_read();            /* key fields typed in meanwhile */
+		if (!want_quit && !pending)
 			keys_manage(1);
 	}
 #ifdef STATS
@@ -704,8 +1452,14 @@ static void patch_flags(void)
 
 static int load_rom(void)
 {
-	long fh = Fopen("ACE.ROM", 0), n;
+	char path[300];
+	long fh, n;
 
+	app_folder(path);
+	strcat(path, "ACE.ROM");
+	fh = Fopen(path, 0);
+	if (fh < 0)
+		fh = Fopen("ACE.ROM", 0);
 	if (fh < 0)
 		return 0;
 	n = Fread((short)fh, 8192, ace_mem);
@@ -713,41 +1467,111 @@ static int load_rom(void)
 	return n == 8192;
 }
 
+/* ACEGEM.INF lives in the folder the program was started from */
+static void find_inf(void)
+{
+	short drv = Dgetdrv();
+
+	inf_path[0] = 'A' + drv;
+	inf_path[1] = ':';
+	Dgetpath(inf_path + 2, drv + 1);
+	if (inf_path[strlen(inf_path) - 1] != '\\')
+		strcat(inf_path, "\\");
+	strcat(inf_path, INF_FILE);
+}
+
+/* MyAES: its ID from appl_getinfo_str(AES_VERSION), else an application
+   of that name (as in the CHIP-8 emulator) */
+static int is_myaes(void)
+{
+	static char id[12], name[256], info[256], more[256];
+	short i;
+
+	memset(id, 0, sizeof id);
+	if (_AESversion >= 0x400 || appl_find("?AGI    ") >= 0) {
+		if (appl_getinfo_str(AES_VERSION, id, name, info, more)) {
+			for (i = 0; i < 5; i++)
+				if (id[i] >= 'a' && id[i] <= 'z')
+					id[i] -= 'a' - 'A';
+			if (memcmp(id, "MYAES", 5) == 0)
+				return 1;
+		}
+	}
+	return appl_find("MYAES   ") >= 0;
+}
+
+static void quit_gem(void)
+{
+	v_clsvwk(vh);
+	exit_gem();
+}
+
 int main(void)
 {
 	short work_in[11], work_out[57], d, i;
 	long rate, v;
+	int r;
 
-	ap_id = appl_init();
-	if (ap_id < 0)
+	find_inf();
+	init_app(RSC_FILE);                 /* stops with an alert without it */
+	if (gl_apid < 0)
 		return 1;
 	if (Getcookie(0x5F43465FL, &v) == C_FOUND) {     /* _CF_: ColdFire */
-		alert("[3][ACEGEM needs a 68000-family CPU.|"
-		      "It does not run on ColdFire.][ OK ]");
-		appl_exit();
+		alert(AL_COLDFIRE);
+		exit_gem();
 		return 1;
 	}
+	if (is_myaes())
+		cf_use_all_userdefs(1);
+	rsrc_gaddr(R_TREE, MENU, &menu);
+	rsrc_gaddr(R_TREE, SETDIAL, &dialog);
+	rsrc_gaddr(R_TREE, ABOUT, &abouttree);
+	rsrc_gaddr(R_TREE, RAMPOP, &rampop);
+	if (_AESnumapps != 1)
+		menu_register(gl_apid, rs_str(FS_APPNAME));
+	if (_AESversion >= 0x400)
+		shel_write(SWM_NEWMSG, NM_APTERM, 0, NULL, NULL);
 	graf_mouse(ARROW, NULL);
+
 	vh = graf_handle(&d, &d, &d, &d);
 	for (i = 0; i < 10; i++)
 		work_in[i] = 1;
 	work_in[10] = 2;
 	v_opnvwk(work_in, &vh, work_out);
 	if (vh <= 0) {
-		appl_exit();
+		alert(AL_NOVDI);
+		exit_gem();
 		return 1;
 	}
 	pix_w = work_out[3] > 0 ? work_out[3] : 1;
 	pix_h = work_out[4] > 0 ? work_out[4] : 1;
+	if (work_out[0] + 1 < ACE_W || work_out[1] + 1 < ACE_H / 2) {
+		alert(AL_SMALL);
+		quit_gem();
+		return 1;
+	}
+	wind_get(0, WF_WORKXYWH, &desk.g_x, &desk.g_y, &desk.g_w, &desk.g_h);
+
+	for (i = 0; i < 5; i++)
+		key_text[i] = dialog[key_obj[i]].ob_spec.tedinfo->te_ptext;
+	layout_dialog(dialog);
+	layout_dialog(abouttree);
+	fix_dial(dialog);                   /* MagiC objects, emulated if needed */
+	fix_dial(abouttree);
+	fix_popup(rampop, 1);
+	aesfix_userdefs(dialog);            /* draw them on our own stack */
+	aesfix_userdefs(abouttree);
+	aesfix_userdefs(rampop);
+	aesfix_userdefs(cf_alert_box);
+	set_mdial_wincb(mdial_messages);
 
 	if (!load_rom()) {
-		alert("[3][ACEGEM cannot read ACE.ROM|"
-		      "(8192 bytes, next to the program).][ OK ]");
-		v_clsvwk(vh);
-		appl_exit();
+		alert(AL_NOROM);
+		quit_gem();
 		return 1;
 	}
 	ace_ram_last = 0xFFFF;                      /* 51K */
+	inf_load();
 	kernel_init();
 	patch_flags();
 
@@ -756,17 +1580,18 @@ int main(void)
 	hold_first = ((rate >> 8) & 0xFF) * 4 + 10; /* Kbrate counts 20 ms */
 	hold_next = (rate & 0xFF) * 4 + 10;
 
+	create_menu(menu);
+	aesfix_userdefs(menu);
 	if (!open_window()) {
-		alert("[3][ACEGEM: no window left.][ OK ]");
-		v_clsvwk(vh);
-		appl_exit();
+		alert(AL_NOWINDOW);
+		delete_menu();
+		quit_gem();
 		return 1;
 	}
 	Supexec(gk_timer_on);
 	key_quiet = ticks();
 
-	if (kernel_run(0) < 0)
-		alert("[3][The Ace ran into an unknown|Z80 instruction.][ OK ]");
+	r = kernel_run(0);
 
 	/* let the keys go up (Control+Q), at most 3 seconds */
 	if (gk_hooked) {
@@ -782,9 +1607,25 @@ int main(void)
 		}
 	}
 	Supexec(gk_timer_off);
-	wind_close(win);
-	wind_delete(win);
-	v_clsvwk(vh);
-	appl_exit();
+	if (r < 0)
+		alert(AL_BADOP);
+
+	settings_read();
+	if (wd && wd->mode == WD_OPEN && wd->win_handle > 0) {
+		dlg_x = wd->work.g_x;
+		dlg_y = wd->work.g_y;
+	}
+	if (wd_about && wd_about->mode == WD_OPEN && wd_about->win_handle > 0) {
+		abt_x = wd_about->work.g_x;
+		abt_y = wd_about->work.g_y;
+	}
+	close_window();
+	inf_save();
+	if (wd)
+		delete_wdial(wd);
+	if (wd_about)
+		delete_wdial(wd_about);
+	delete_menu();
+	quit_gem();
 	return 0;
 }
