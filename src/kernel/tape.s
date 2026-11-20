@@ -4,7 +4,7 @@
 ;   block = 16-bit little-endian length (data+1), data, XOR checksum
 ; A header block (26 bytes, name at +1) is always followed by a data block.
 ; Tape file: TAPE.ACE in the current directory, or the one picked with
-; Control+O (tape_select, GEM file selector).
+; Control+O (tape_select in the front end).
 ; GPL v2 or later (derived from xAce tape.c, Edward Patel).
 ;
 ; TODO: .TAP/.TZX support, truncating on save, fall-back images when no tape.
@@ -210,29 +210,3 @@ tape_save:
         bsr     tape_write
 .out:   movem.l (sp)+,d3-d7/a0-a1/a3
         rts
-
-; ---------------------------------------------------------------------------
-; Control+O (host_service, supervisor mode, all registers saved): pick the
-; tape file with the GEM file selector.  Also the settings dialog's Tape
-; button (tape_pick, inside a GEM session).
-; ---------------------------------------------------------------------------
-tape_select:
-        clr.b   open_flag
-        jsr     gem_enter
-        bne.s   .back
-        bsr.s   tape_pick
-.back:  jmp     gem_leave
-
-; file selector for the tape; d0 = 0 (Z) when a new tape was picked
-tape_pick:
-        lea     tape_mask,a0
-        lea     tape_title,a1
-        jsr     fsel
-        bne.s   .no
-        lea     fs_full,a0
-        lea     tapename,a1
-.cp:    move.b  (a0)+,(a1)+
-        bne.s   .cp
-        bsr     tape_close                  ; next LOAD/SAVE opens the new file
-        moveq   #0,d0
-.no:    rts

@@ -1,0 +1,4 @@
+wait 18
+type 1 2 + ._
+wait 2
+shot

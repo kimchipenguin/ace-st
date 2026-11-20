@@ -1497,7 +1497,7 @@ slot_end:
 cb_00:
         GET_B
         rol.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_B
         NEXT
@@ -1505,7 +1505,7 @@ cb_00:
 cb_01:
         GET_C
         rol.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_C
         NEXT
@@ -1513,7 +1513,7 @@ cb_01:
 cb_02:
         GET_D
         rol.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_D
         NEXT
@@ -1521,7 +1521,7 @@ cb_02:
 cb_03:
         GET_E
         rol.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_E
         NEXT
@@ -1529,7 +1529,7 @@ cb_03:
 cb_04:
         GET_H
         rol.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_H
         NEXT
@@ -1537,7 +1537,7 @@ cb_04:
 cb_05:
         GET_L
         rol.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_L
         NEXT
@@ -1545,7 +1545,7 @@ cb_05:
 cb_06:
         GET_M
         rol.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_M
         NEXT
@@ -1553,7 +1553,7 @@ cb_06:
 cb_07:
         GET_A
         rol.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_A
         NEXT
@@ -1561,7 +1561,7 @@ cb_07:
 cb_08:
         GET_B
         ror.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_B
         NEXT
@@ -1569,7 +1569,7 @@ cb_08:
 cb_09:
         GET_C
         ror.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_C
         NEXT
@@ -1577,7 +1577,7 @@ cb_09:
 cb_0a:
         GET_D
         ror.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_D
         NEXT
@@ -1585,7 +1585,7 @@ cb_0a:
 cb_0b:
         GET_E
         ror.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_E
         NEXT
@@ -1593,7 +1593,7 @@ cb_0b:
 cb_0c:
         GET_H
         ror.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_H
         NEXT
@@ -1601,7 +1601,7 @@ cb_0c:
 cb_0d:
         GET_L
         ror.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_L
         NEXT
@@ -1609,7 +1609,7 @@ cb_0d:
 cb_0e:
         GET_M
         ror.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_M
         NEXT
@@ -1617,7 +1617,7 @@ cb_0e:
 cb_0f:
         GET_A
         ror.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_A
         NEXT
@@ -1626,7 +1626,7 @@ cb_10:
         GET_B
         SETX
         roxl.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_B
         NEXT
@@ -1635,7 +1635,7 @@ cb_11:
         GET_C
         SETX
         roxl.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_C
         NEXT
@@ -1644,7 +1644,7 @@ cb_12:
         GET_D
         SETX
         roxl.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_D
         NEXT
@@ -1653,7 +1653,7 @@ cb_13:
         GET_E
         SETX
         roxl.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_E
         NEXT
@@ -1662,7 +1662,7 @@ cb_14:
         GET_H
         SETX
         roxl.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_H
         NEXT
@@ -1671,7 +1671,7 @@ cb_15:
         GET_L
         SETX
         roxl.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_L
         NEXT
@@ -1680,7 +1680,7 @@ cb_16:
         GET_M
         SETX
         roxl.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_M
         NEXT
@@ -1689,7 +1689,7 @@ cb_17:
         GET_A
         SETX
         roxl.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_A
         NEXT
@@ -1698,7 +1698,7 @@ cb_18:
         GET_B
         SETX
         roxr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_B
         NEXT
@@ -1707,7 +1707,7 @@ cb_19:
         GET_C
         SETX
         roxr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_C
         NEXT
@@ -1716,7 +1716,7 @@ cb_1a:
         GET_D
         SETX
         roxr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_D
         NEXT
@@ -1725,7 +1725,7 @@ cb_1b:
         GET_E
         SETX
         roxr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_E
         NEXT
@@ -1734,7 +1734,7 @@ cb_1c:
         GET_H
         SETX
         roxr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_H
         NEXT
@@ -1743,7 +1743,7 @@ cb_1d:
         GET_L
         SETX
         roxr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_L
         NEXT
@@ -1752,7 +1752,7 @@ cb_1e:
         GET_M
         SETX
         roxr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_M
         NEXT
@@ -1761,7 +1761,7 @@ cb_1f:
         GET_A
         SETX
         roxr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_A
         NEXT
@@ -1769,7 +1769,7 @@ cb_1f:
 cb_20:
         GET_B
         asl.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         PUT_B
@@ -1778,7 +1778,7 @@ cb_20:
 cb_21:
         GET_C
         asl.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         PUT_C
@@ -1787,7 +1787,7 @@ cb_21:
 cb_22:
         GET_D
         asl.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         PUT_D
@@ -1796,7 +1796,7 @@ cb_22:
 cb_23:
         GET_E
         asl.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         PUT_E
@@ -1805,7 +1805,7 @@ cb_23:
 cb_24:
         GET_H
         asl.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         PUT_H
@@ -1814,7 +1814,7 @@ cb_24:
 cb_25:
         GET_L
         asl.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         PUT_L
@@ -1823,7 +1823,7 @@ cb_25:
 cb_26:
         GET_M
         asl.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         PUT_M
@@ -1832,7 +1832,7 @@ cb_26:
 cb_27:
         GET_A
         asl.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         PUT_A
@@ -1841,7 +1841,7 @@ cb_27:
 cb_28:
         GET_B
         asr.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         PUT_B
@@ -1850,7 +1850,7 @@ cb_28:
 cb_29:
         GET_C
         asr.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         PUT_C
@@ -1859,7 +1859,7 @@ cb_29:
 cb_2a:
         GET_D
         asr.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         PUT_D
@@ -1868,7 +1868,7 @@ cb_2a:
 cb_2b:
         GET_E
         asr.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         PUT_E
@@ -1877,7 +1877,7 @@ cb_2b:
 cb_2c:
         GET_H
         asr.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         PUT_H
@@ -1886,7 +1886,7 @@ cb_2c:
 cb_2d:
         GET_L
         asr.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         PUT_L
@@ -1895,7 +1895,7 @@ cb_2d:
 cb_2e:
         GET_M
         asr.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         PUT_M
@@ -1904,7 +1904,7 @@ cb_2e:
 cb_2f:
         GET_A
         asr.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         PUT_A
@@ -1937,7 +1937,7 @@ cb_37:
 cb_38:
         GET_B
         lsr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_B
         NEXT
@@ -1945,7 +1945,7 @@ cb_38:
 cb_39:
         GET_C
         lsr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_C
         NEXT
@@ -1953,7 +1953,7 @@ cb_39:
 cb_3a:
         GET_D
         lsr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_D
         NEXT
@@ -1961,7 +1961,7 @@ cb_3a:
 cb_3b:
         GET_E
         lsr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_E
         NEXT
@@ -1969,7 +1969,7 @@ cb_3b:
 cb_3c:
         GET_H
         lsr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_H
         NEXT
@@ -1977,7 +1977,7 @@ cb_3c:
 cb_3d:
         GET_L
         lsr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_L
         NEXT
@@ -1985,7 +1985,7 @@ cb_3d:
 cb_3e:
         GET_M
         lsr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_M
         NEXT
@@ -1993,7 +1993,7 @@ cb_3e:
 cb_3f:
         GET_A
         lsr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         PUT_A
         NEXT
@@ -2001,7 +2001,7 @@ cb_3f:
 cb_40:
         GET_B
         btst #0,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2012,7 +2012,7 @@ cb_40:
 cb_41:
         GET_C
         btst #0,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2023,7 +2023,7 @@ cb_41:
 cb_42:
         GET_D
         btst #0,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2034,7 +2034,7 @@ cb_42:
 cb_43:
         GET_E
         btst #0,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2045,7 +2045,7 @@ cb_43:
 cb_44:
         GET_H
         btst #0,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2056,7 +2056,7 @@ cb_44:
 cb_45:
         GET_L
         btst #0,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2067,7 +2067,7 @@ cb_45:
 cb_46:
         GET_M
         btst #0,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2078,7 +2078,7 @@ cb_46:
 cb_47:
         GET_A
         btst #0,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2089,7 +2089,7 @@ cb_47:
 cb_48:
         GET_B
         btst #1,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2100,7 +2100,7 @@ cb_48:
 cb_49:
         GET_C
         btst #1,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2111,7 +2111,7 @@ cb_49:
 cb_4a:
         GET_D
         btst #1,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2122,7 +2122,7 @@ cb_4a:
 cb_4b:
         GET_E
         btst #1,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2133,7 +2133,7 @@ cb_4b:
 cb_4c:
         GET_H
         btst #1,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2144,7 +2144,7 @@ cb_4c:
 cb_4d:
         GET_L
         btst #1,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2155,7 +2155,7 @@ cb_4d:
 cb_4e:
         GET_M
         btst #1,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2166,7 +2166,7 @@ cb_4e:
 cb_4f:
         GET_A
         btst #1,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2177,7 +2177,7 @@ cb_4f:
 cb_50:
         GET_B
         btst #2,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2188,7 +2188,7 @@ cb_50:
 cb_51:
         GET_C
         btst #2,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2199,7 +2199,7 @@ cb_51:
 cb_52:
         GET_D
         btst #2,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2210,7 +2210,7 @@ cb_52:
 cb_53:
         GET_E
         btst #2,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2221,7 +2221,7 @@ cb_53:
 cb_54:
         GET_H
         btst #2,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2232,7 +2232,7 @@ cb_54:
 cb_55:
         GET_L
         btst #2,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2243,7 +2243,7 @@ cb_55:
 cb_56:
         GET_M
         btst #2,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2254,7 +2254,7 @@ cb_56:
 cb_57:
         GET_A
         btst #2,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2265,7 +2265,7 @@ cb_57:
 cb_58:
         GET_B
         btst #3,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2276,7 +2276,7 @@ cb_58:
 cb_59:
         GET_C
         btst #3,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2287,7 +2287,7 @@ cb_59:
 cb_5a:
         GET_D
         btst #3,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2298,7 +2298,7 @@ cb_5a:
 cb_5b:
         GET_E
         btst #3,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2309,7 +2309,7 @@ cb_5b:
 cb_5c:
         GET_H
         btst #3,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2320,7 +2320,7 @@ cb_5c:
 cb_5d:
         GET_L
         btst #3,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2331,7 +2331,7 @@ cb_5d:
 cb_5e:
         GET_M
         btst #3,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2342,7 +2342,7 @@ cb_5e:
 cb_5f:
         GET_A
         btst #3,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2353,7 +2353,7 @@ cb_5f:
 cb_60:
         GET_B
         btst #4,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2364,7 +2364,7 @@ cb_60:
 cb_61:
         GET_C
         btst #4,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2375,7 +2375,7 @@ cb_61:
 cb_62:
         GET_D
         btst #4,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2386,7 +2386,7 @@ cb_62:
 cb_63:
         GET_E
         btst #4,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2397,7 +2397,7 @@ cb_63:
 cb_64:
         GET_H
         btst #4,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2408,7 +2408,7 @@ cb_64:
 cb_65:
         GET_L
         btst #4,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2419,7 +2419,7 @@ cb_65:
 cb_66:
         GET_M
         btst #4,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2430,7 +2430,7 @@ cb_66:
 cb_67:
         GET_A
         btst #4,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2441,7 +2441,7 @@ cb_67:
 cb_68:
         GET_B
         btst #5,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2452,7 +2452,7 @@ cb_68:
 cb_69:
         GET_C
         btst #5,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2463,7 +2463,7 @@ cb_69:
 cb_6a:
         GET_D
         btst #5,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2474,7 +2474,7 @@ cb_6a:
 cb_6b:
         GET_E
         btst #5,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2485,7 +2485,7 @@ cb_6b:
 cb_6c:
         GET_H
         btst #5,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2496,7 +2496,7 @@ cb_6c:
 cb_6d:
         GET_L
         btst #5,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2507,7 +2507,7 @@ cb_6d:
 cb_6e:
         GET_M
         btst #5,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2518,7 +2518,7 @@ cb_6e:
 cb_6f:
         GET_A
         btst #5,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2529,7 +2529,7 @@ cb_6f:
 cb_70:
         GET_B
         btst #6,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2540,7 +2540,7 @@ cb_70:
 cb_71:
         GET_C
         btst #6,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2551,7 +2551,7 @@ cb_71:
 cb_72:
         GET_D
         btst #6,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2562,7 +2562,7 @@ cb_72:
 cb_73:
         GET_E
         btst #6,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2573,7 +2573,7 @@ cb_73:
 cb_74:
         GET_H
         btst #6,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2584,7 +2584,7 @@ cb_74:
 cb_75:
         GET_L
         btst #6,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2595,7 +2595,7 @@ cb_75:
 cb_76:
         GET_M
         btst #6,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2606,7 +2606,7 @@ cb_76:
 cb_77:
         GET_A
         btst #6,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2617,7 +2617,7 @@ cb_77:
 cb_78:
         GET_B
         btst #7,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2628,7 +2628,7 @@ cb_78:
 cb_79:
         GET_C
         btst #7,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2639,7 +2639,7 @@ cb_79:
 cb_7a:
         GET_D
         btst #7,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2650,7 +2650,7 @@ cb_7a:
 cb_7b:
         GET_E
         btst #7,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2661,7 +2661,7 @@ cb_7b:
 cb_7c:
         GET_H
         btst #7,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2672,7 +2672,7 @@ cb_7c:
 cb_7d:
         GET_L
         btst #7,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2683,7 +2683,7 @@ cb_7d:
 cb_7e:
         GET_M
         btst #7,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -2694,7 +2694,7 @@ cb_7e:
 cb_7f:
         GET_A
         btst #7,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -3608,13 +3608,13 @@ ed_79:
 ed_42:
         SETX
         subx.w d4,d6
-        move.w sr,d3
+        GETF d3
         NEXT
 
 ed_4a:
         SETX
         addx.w d4,d6
-        move.w sr,d3
+        GETF d3
         NEXT
 
 ed_43:
@@ -3631,13 +3631,13 @@ ed_4b:
 ed_52:
         SETX
         subx.w d5,d6
-        move.w sr,d3
+        GETF d3
         NEXT
 
 ed_5a:
         SETX
         addx.w d5,d6
-        move.w sr,d3
+        GETF d3
         NEXT
 
 ed_53:
@@ -3654,13 +3654,13 @@ ed_5b:
 ed_62:
         SETX
         subx.w d6,d6
-        move.w sr,d3
+        GETF d3
         NEXT
 
 ed_6a:
         SETX
         addx.w d6,d6
-        move.w sr,d3
+        GETF d3
         NEXT
 
 ed_63:
@@ -3678,14 +3678,14 @@ ed_72:
         SP2W d2
         SETX
         subx.w d2,d6
-        move.w sr,d3
+        GETF d3
         NEXT
 
 ed_7a:
         SP2W d2
         SETX
         addx.w d2,d6
-        move.w sr,d3
+        GETF d3
         NEXT
 
 ed_73:
@@ -3702,42 +3702,42 @@ ed_7b:
 
 ed_44:
         neg.b d7
-        move.w sr,d3
+        GETF d3
         NEXT
 
 ed_4c:
         neg.b d7
-        move.w sr,d3
+        GETF d3
         NEXT
 
 ed_54:
         neg.b d7
-        move.w sr,d3
+        GETF d3
         NEXT
 
 ed_5c:
         neg.b d7
-        move.w sr,d3
+        GETF d3
         NEXT
 
 ed_64:
         neg.b d7
-        move.w sr,d3
+        GETF d3
         NEXT
 
 ed_6c:
         neg.b d7
-        move.w sr,d3
+        GETF d3
         NEXT
 
 ed_74:
         neg.b d7
-        move.w sr,d3
+        GETF d3
         NEXT
 
 ed_7c:
         neg.b d7
-        move.w sr,d3
+        GETF d3
         NEXT
 
 ed_45:
@@ -3884,7 +3884,7 @@ ed_b8:
 ed_a1:
         move.b (a5,d6.l),d2
         cmp.b d2,d7
-        move.w sr,d1
+        GETF d1
         addq.w #1,d6
         subq.w #1,d4
         and.b #$0c,d1
@@ -3899,7 +3899,7 @@ ed_a1:
 ed_a9:
         move.b (a5,d6.l),d2
         cmp.b d2,d7
-        move.w sr,d1
+        GETF d1
         subq.w #1,d6
         subq.w #1,d4
         and.b #$0c,d1
@@ -3915,7 +3915,7 @@ ed_b1:
 .l:
         move.b (a5,d6.l),d2
         cmp.b d2,d7
-        move.w sr,d1
+        GETF d1
         addq.w #1,d6
         subq.w #1,d4
         btst #2,d1
@@ -3936,7 +3936,7 @@ ed_b9:
 .l:
         move.b (a5,d6.l),d2
         cmp.b d2,d7
-        move.w sr,d1
+        GETF d1
         subq.w #1,d6
         subq.w #1,d4
         btst #2,d1
@@ -4484,7 +4484,7 @@ fd_cb:
 ddcb_00:
         move.b (a5,d1.l),d2
         rol.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4492,7 +4492,7 @@ ddcb_00:
 ddcb_01:
         move.b (a5,d1.l),d2
         rol.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4500,7 +4500,7 @@ ddcb_01:
 ddcb_02:
         move.b (a5,d1.l),d2
         rol.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4508,7 +4508,7 @@ ddcb_02:
 ddcb_03:
         move.b (a5,d1.l),d2
         rol.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4516,7 +4516,7 @@ ddcb_03:
 ddcb_04:
         move.b (a5,d1.l),d2
         rol.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4524,7 +4524,7 @@ ddcb_04:
 ddcb_05:
         move.b (a5,d1.l),d2
         rol.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4532,7 +4532,7 @@ ddcb_05:
 ddcb_06:
         move.b (a5,d1.l),d2
         rol.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4540,7 +4540,7 @@ ddcb_06:
 ddcb_07:
         move.b (a5,d1.l),d2
         rol.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4548,7 +4548,7 @@ ddcb_07:
 ddcb_08:
         move.b (a5,d1.l),d2
         ror.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4556,7 +4556,7 @@ ddcb_08:
 ddcb_09:
         move.b (a5,d1.l),d2
         ror.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4564,7 +4564,7 @@ ddcb_09:
 ddcb_0a:
         move.b (a5,d1.l),d2
         ror.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4572,7 +4572,7 @@ ddcb_0a:
 ddcb_0b:
         move.b (a5,d1.l),d2
         ror.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4580,7 +4580,7 @@ ddcb_0b:
 ddcb_0c:
         move.b (a5,d1.l),d2
         ror.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4588,7 +4588,7 @@ ddcb_0c:
 ddcb_0d:
         move.b (a5,d1.l),d2
         ror.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4596,7 +4596,7 @@ ddcb_0d:
 ddcb_0e:
         move.b (a5,d1.l),d2
         ror.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4604,7 +4604,7 @@ ddcb_0e:
 ddcb_0f:
         move.b (a5,d1.l),d2
         ror.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4613,7 +4613,7 @@ ddcb_10:
         move.b (a5,d1.l),d2
         SETX
         roxl.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4622,7 +4622,7 @@ ddcb_11:
         move.b (a5,d1.l),d2
         SETX
         roxl.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4631,7 +4631,7 @@ ddcb_12:
         move.b (a5,d1.l),d2
         SETX
         roxl.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4640,7 +4640,7 @@ ddcb_13:
         move.b (a5,d1.l),d2
         SETX
         roxl.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4649,7 +4649,7 @@ ddcb_14:
         move.b (a5,d1.l),d2
         SETX
         roxl.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4658,7 +4658,7 @@ ddcb_15:
         move.b (a5,d1.l),d2
         SETX
         roxl.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4667,7 +4667,7 @@ ddcb_16:
         move.b (a5,d1.l),d2
         SETX
         roxl.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4676,7 +4676,7 @@ ddcb_17:
         move.b (a5,d1.l),d2
         SETX
         roxl.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4685,7 +4685,7 @@ ddcb_18:
         move.b (a5,d1.l),d2
         SETX
         roxr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4694,7 +4694,7 @@ ddcb_19:
         move.b (a5,d1.l),d2
         SETX
         roxr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4703,7 +4703,7 @@ ddcb_1a:
         move.b (a5,d1.l),d2
         SETX
         roxr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4712,7 +4712,7 @@ ddcb_1b:
         move.b (a5,d1.l),d2
         SETX
         roxr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4721,7 +4721,7 @@ ddcb_1c:
         move.b (a5,d1.l),d2
         SETX
         roxr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4730,7 +4730,7 @@ ddcb_1d:
         move.b (a5,d1.l),d2
         SETX
         roxr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4739,7 +4739,7 @@ ddcb_1e:
         move.b (a5,d1.l),d2
         SETX
         roxr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4748,7 +4748,7 @@ ddcb_1f:
         move.b (a5,d1.l),d2
         SETX
         roxr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4756,7 +4756,7 @@ ddcb_1f:
 ddcb_20:
         move.b (a5,d1.l),d2
         asl.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         STORE
@@ -4765,7 +4765,7 @@ ddcb_20:
 ddcb_21:
         move.b (a5,d1.l),d2
         asl.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         STORE
@@ -4774,7 +4774,7 @@ ddcb_21:
 ddcb_22:
         move.b (a5,d1.l),d2
         asl.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         STORE
@@ -4783,7 +4783,7 @@ ddcb_22:
 ddcb_23:
         move.b (a5,d1.l),d2
         asl.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         STORE
@@ -4792,7 +4792,7 @@ ddcb_23:
 ddcb_24:
         move.b (a5,d1.l),d2
         asl.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         STORE
@@ -4801,7 +4801,7 @@ ddcb_24:
 ddcb_25:
         move.b (a5,d1.l),d2
         asl.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         STORE
@@ -4810,7 +4810,7 @@ ddcb_25:
 ddcb_26:
         move.b (a5,d1.l),d2
         asl.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         STORE
@@ -4819,7 +4819,7 @@ ddcb_26:
 ddcb_27:
         move.b (a5,d1.l),d2
         asl.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         STORE
@@ -4828,7 +4828,7 @@ ddcb_27:
 ddcb_28:
         move.b (a5,d1.l),d2
         asr.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         STORE
@@ -4837,7 +4837,7 @@ ddcb_28:
 ddcb_29:
         move.b (a5,d1.l),d2
         asr.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         STORE
@@ -4846,7 +4846,7 @@ ddcb_29:
 ddcb_2a:
         move.b (a5,d1.l),d2
         asr.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         STORE
@@ -4855,7 +4855,7 @@ ddcb_2a:
 ddcb_2b:
         move.b (a5,d1.l),d2
         asr.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         STORE
@@ -4864,7 +4864,7 @@ ddcb_2b:
 ddcb_2c:
         move.b (a5,d1.l),d2
         asr.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         STORE
@@ -4873,7 +4873,7 @@ ddcb_2c:
 ddcb_2d:
         move.b (a5,d1.l),d2
         asr.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         STORE
@@ -4882,7 +4882,7 @@ ddcb_2d:
 ddcb_2e:
         move.b (a5,d1.l),d2
         asr.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         STORE
@@ -4891,7 +4891,7 @@ ddcb_2e:
 ddcb_2f:
         move.b (a5,d1.l),d2
         asr.b #1,d2
-        move.w sr,d3
+        GETF d3
         and.b #$fd,d3
         PAR d2
         STORE
@@ -4924,7 +4924,7 @@ ddcb_37:
 ddcb_38:
         move.b (a5,d1.l),d2
         lsr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4932,7 +4932,7 @@ ddcb_38:
 ddcb_39:
         move.b (a5,d1.l),d2
         lsr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4940,7 +4940,7 @@ ddcb_39:
 ddcb_3a:
         move.b (a5,d1.l),d2
         lsr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4948,7 +4948,7 @@ ddcb_3a:
 ddcb_3b:
         move.b (a5,d1.l),d2
         lsr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4956,7 +4956,7 @@ ddcb_3b:
 ddcb_3c:
         move.b (a5,d1.l),d2
         lsr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4964,7 +4964,7 @@ ddcb_3c:
 ddcb_3d:
         move.b (a5,d1.l),d2
         lsr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4972,7 +4972,7 @@ ddcb_3d:
 ddcb_3e:
         move.b (a5,d1.l),d2
         lsr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4980,7 +4980,7 @@ ddcb_3e:
 ddcb_3f:
         move.b (a5,d1.l),d2
         lsr.b #1,d2
-        move.w sr,d3
+        GETF d3
         PAR d2
         STORE
         NEXT
@@ -4988,7 +4988,7 @@ ddcb_3f:
 ddcb_40:
         move.b (a5,d1.l),d2
         btst #0,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -4999,7 +4999,7 @@ ddcb_40:
 ddcb_41:
         move.b (a5,d1.l),d2
         btst #0,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5010,7 +5010,7 @@ ddcb_41:
 ddcb_42:
         move.b (a5,d1.l),d2
         btst #0,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5021,7 +5021,7 @@ ddcb_42:
 ddcb_43:
         move.b (a5,d1.l),d2
         btst #0,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5032,7 +5032,7 @@ ddcb_43:
 ddcb_44:
         move.b (a5,d1.l),d2
         btst #0,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5043,7 +5043,7 @@ ddcb_44:
 ddcb_45:
         move.b (a5,d1.l),d2
         btst #0,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5054,7 +5054,7 @@ ddcb_45:
 ddcb_46:
         move.b (a5,d1.l),d2
         btst #0,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5065,7 +5065,7 @@ ddcb_46:
 ddcb_47:
         move.b (a5,d1.l),d2
         btst #0,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5076,7 +5076,7 @@ ddcb_47:
 ddcb_48:
         move.b (a5,d1.l),d2
         btst #1,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5087,7 +5087,7 @@ ddcb_48:
 ddcb_49:
         move.b (a5,d1.l),d2
         btst #1,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5098,7 +5098,7 @@ ddcb_49:
 ddcb_4a:
         move.b (a5,d1.l),d2
         btst #1,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5109,7 +5109,7 @@ ddcb_4a:
 ddcb_4b:
         move.b (a5,d1.l),d2
         btst #1,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5120,7 +5120,7 @@ ddcb_4b:
 ddcb_4c:
         move.b (a5,d1.l),d2
         btst #1,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5131,7 +5131,7 @@ ddcb_4c:
 ddcb_4d:
         move.b (a5,d1.l),d2
         btst #1,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5142,7 +5142,7 @@ ddcb_4d:
 ddcb_4e:
         move.b (a5,d1.l),d2
         btst #1,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5153,7 +5153,7 @@ ddcb_4e:
 ddcb_4f:
         move.b (a5,d1.l),d2
         btst #1,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5164,7 +5164,7 @@ ddcb_4f:
 ddcb_50:
         move.b (a5,d1.l),d2
         btst #2,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5175,7 +5175,7 @@ ddcb_50:
 ddcb_51:
         move.b (a5,d1.l),d2
         btst #2,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5186,7 +5186,7 @@ ddcb_51:
 ddcb_52:
         move.b (a5,d1.l),d2
         btst #2,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5197,7 +5197,7 @@ ddcb_52:
 ddcb_53:
         move.b (a5,d1.l),d2
         btst #2,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5208,7 +5208,7 @@ ddcb_53:
 ddcb_54:
         move.b (a5,d1.l),d2
         btst #2,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5219,7 +5219,7 @@ ddcb_54:
 ddcb_55:
         move.b (a5,d1.l),d2
         btst #2,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5230,7 +5230,7 @@ ddcb_55:
 ddcb_56:
         move.b (a5,d1.l),d2
         btst #2,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5241,7 +5241,7 @@ ddcb_56:
 ddcb_57:
         move.b (a5,d1.l),d2
         btst #2,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5252,7 +5252,7 @@ ddcb_57:
 ddcb_58:
         move.b (a5,d1.l),d2
         btst #3,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5263,7 +5263,7 @@ ddcb_58:
 ddcb_59:
         move.b (a5,d1.l),d2
         btst #3,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5274,7 +5274,7 @@ ddcb_59:
 ddcb_5a:
         move.b (a5,d1.l),d2
         btst #3,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5285,7 +5285,7 @@ ddcb_5a:
 ddcb_5b:
         move.b (a5,d1.l),d2
         btst #3,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5296,7 +5296,7 @@ ddcb_5b:
 ddcb_5c:
         move.b (a5,d1.l),d2
         btst #3,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5307,7 +5307,7 @@ ddcb_5c:
 ddcb_5d:
         move.b (a5,d1.l),d2
         btst #3,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5318,7 +5318,7 @@ ddcb_5d:
 ddcb_5e:
         move.b (a5,d1.l),d2
         btst #3,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5329,7 +5329,7 @@ ddcb_5e:
 ddcb_5f:
         move.b (a5,d1.l),d2
         btst #3,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5340,7 +5340,7 @@ ddcb_5f:
 ddcb_60:
         move.b (a5,d1.l),d2
         btst #4,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5351,7 +5351,7 @@ ddcb_60:
 ddcb_61:
         move.b (a5,d1.l),d2
         btst #4,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5362,7 +5362,7 @@ ddcb_61:
 ddcb_62:
         move.b (a5,d1.l),d2
         btst #4,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5373,7 +5373,7 @@ ddcb_62:
 ddcb_63:
         move.b (a5,d1.l),d2
         btst #4,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5384,7 +5384,7 @@ ddcb_63:
 ddcb_64:
         move.b (a5,d1.l),d2
         btst #4,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5395,7 +5395,7 @@ ddcb_64:
 ddcb_65:
         move.b (a5,d1.l),d2
         btst #4,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5406,7 +5406,7 @@ ddcb_65:
 ddcb_66:
         move.b (a5,d1.l),d2
         btst #4,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5417,7 +5417,7 @@ ddcb_66:
 ddcb_67:
         move.b (a5,d1.l),d2
         btst #4,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5428,7 +5428,7 @@ ddcb_67:
 ddcb_68:
         move.b (a5,d1.l),d2
         btst #5,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5439,7 +5439,7 @@ ddcb_68:
 ddcb_69:
         move.b (a5,d1.l),d2
         btst #5,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5450,7 +5450,7 @@ ddcb_69:
 ddcb_6a:
         move.b (a5,d1.l),d2
         btst #5,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5461,7 +5461,7 @@ ddcb_6a:
 ddcb_6b:
         move.b (a5,d1.l),d2
         btst #5,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5472,7 +5472,7 @@ ddcb_6b:
 ddcb_6c:
         move.b (a5,d1.l),d2
         btst #5,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5483,7 +5483,7 @@ ddcb_6c:
 ddcb_6d:
         move.b (a5,d1.l),d2
         btst #5,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5494,7 +5494,7 @@ ddcb_6d:
 ddcb_6e:
         move.b (a5,d1.l),d2
         btst #5,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5505,7 +5505,7 @@ ddcb_6e:
 ddcb_6f:
         move.b (a5,d1.l),d2
         btst #5,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5516,7 +5516,7 @@ ddcb_6f:
 ddcb_70:
         move.b (a5,d1.l),d2
         btst #6,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5527,7 +5527,7 @@ ddcb_70:
 ddcb_71:
         move.b (a5,d1.l),d2
         btst #6,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5538,7 +5538,7 @@ ddcb_71:
 ddcb_72:
         move.b (a5,d1.l),d2
         btst #6,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5549,7 +5549,7 @@ ddcb_72:
 ddcb_73:
         move.b (a5,d1.l),d2
         btst #6,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5560,7 +5560,7 @@ ddcb_73:
 ddcb_74:
         move.b (a5,d1.l),d2
         btst #6,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5571,7 +5571,7 @@ ddcb_74:
 ddcb_75:
         move.b (a5,d1.l),d2
         btst #6,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5582,7 +5582,7 @@ ddcb_75:
 ddcb_76:
         move.b (a5,d1.l),d2
         btst #6,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5593,7 +5593,7 @@ ddcb_76:
 ddcb_77:
         move.b (a5,d1.l),d2
         btst #6,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5604,7 +5604,7 @@ ddcb_77:
 ddcb_78:
         move.b (a5,d1.l),d2
         btst #7,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5615,7 +5615,7 @@ ddcb_78:
 ddcb_79:
         move.b (a5,d1.l),d2
         btst #7,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5626,7 +5626,7 @@ ddcb_79:
 ddcb_7a:
         move.b (a5,d1.l),d2
         btst #7,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5637,7 +5637,7 @@ ddcb_7a:
 ddcb_7b:
         move.b (a5,d1.l),d2
         btst #7,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5648,7 +5648,7 @@ ddcb_7b:
 ddcb_7c:
         move.b (a5,d1.l),d2
         btst #7,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5659,7 +5659,7 @@ ddcb_7c:
 ddcb_7d:
         move.b (a5,d1.l),d2
         btst #7,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5670,7 +5670,7 @@ ddcb_7d:
 ddcb_7e:
         move.b (a5,d1.l),d2
         btst #7,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3
@@ -5681,7 +5681,7 @@ ddcb_7e:
 ddcb_7f:
         move.b (a5,d1.l),d2
         btst #7,d2
-        move.w sr,d0
+        GETF d0
         and.b #4,d0
         and.b #1,d3
         or.b d0,d3

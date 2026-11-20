@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Generates src/z80ops.s (Z80 opcode handlers + dispatch tables) and
-src/tables.s (parity table, ST scancode -> Ace keyboard matrix).
+Generates src/kernel/z80ops.s (Z80 opcode handlers + dispatch tables) and
+src/kernel/tables.s (parity table, ST scancode -> Ace keyboard matrix).
 
-Register conventions and helper macros are documented in src/macros.s.
+Register conventions and helper macros are documented in src/kernel/macros.s.
 Every handler ends in NEXT (or jumps to do_int via CHKINT before it).
 
 GPL v2 or later; keyboard matrix data derived from xAce.
@@ -11,7 +11,7 @@ GPL v2 or later; keyboard matrix data derived from xAce.
 import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SRC = os.path.join(HERE, '..', 'src')
+SRC = os.path.join(HERE, "..", "src", "kernel")
 
 out = []
 tables = {'o': {}, 'cb': {}, 'ed': {}, 'dd': {}, 'fd': {}, 'ddcb': {}}
@@ -244,22 +244,22 @@ def gen_main():
 def cb_body(x, y):
     if x == 0:
         if y == 0:
-            return ['rol.b #1,d2', 'move.w sr,d3', 'PAR d2']
+            return ['rol.b #1,d2', 'GETF d3', 'PAR d2']
         if y == 1:
-            return ['ror.b #1,d2', 'move.w sr,d3', 'PAR d2']
+            return ['ror.b #1,d2', 'GETF d3', 'PAR d2']
         if y == 2:
-            return ['SETX', 'roxl.b #1,d2', 'move.w sr,d3', 'PAR d2']
+            return ['SETX', 'roxl.b #1,d2', 'GETF d3', 'PAR d2']
         if y == 3:
-            return ['SETX', 'roxr.b #1,d2', 'move.w sr,d3', 'PAR d2']
+            return ['SETX', 'roxr.b #1,d2', 'GETF d3', 'PAR d2']
         if y == 4:
-            return ['asl.b #1,d2', 'move.w sr,d3', 'and.b #$fd,d3', 'PAR d2']
+            return ['asl.b #1,d2', 'GETF d3', 'and.b #$fd,d3', 'PAR d2']
         if y == 5:
-            return ['asr.b #1,d2', 'move.w sr,d3', 'and.b #$fd,d3', 'PAR d2']
+            return ['asr.b #1,d2', 'GETF d3', 'and.b #$fd,d3', 'PAR d2']
         if y == 6:
             return None                                # SLL (undocumented)
-        return ['lsr.b #1,d2', 'move.w sr,d3', 'PAR d2']
+        return ['lsr.b #1,d2', 'GETF d3', 'PAR d2']
     if x == 1:
-        return ['btst #%d,d2' % y, 'move.w sr,d0', 'and.b #4,d0',
+        return ['btst #%d,d2' % y, 'GETF d0', 'and.b #4,d0',
                 'and.b #1,d3', 'or.b d0,d3', 'lsr.b #1,d0', 'or.b d0,d3']
     if x == 2:
         return ['bclr #%d,d2' % y]
@@ -323,9 +323,9 @@ def gen_ed():
             pre = []
             opn = PAIR[rr]
         handler('ed', 0x42 + base,
-                pre + ['SETX', 'subx.w %s,d6' % opn, 'move.w sr,d3'])
+                pre + ['SETX', 'subx.w %s,d6' % opn, 'GETF d3'])
         handler('ed', 0x4A + base,
-                pre + ['SETX', 'addx.w %s,d6' % opn, 'move.w sr,d3'])
+                pre + ['SETX', 'addx.w %s,d6' % opn, 'GETF d3'])
         # LD (nn),rr / LD rr,(nn)
         if rr == 'SP':
             handler('ed', 0x43 + base, [
@@ -338,7 +338,7 @@ def gen_ed():
             handler('ed', 0x4B + base, ['RDIMM16 d1', 'RDW %s' % PAIR[rr]])
 
     for code in (0x44, 0x4C, 0x54, 0x5C, 0x64, 0x6C, 0x74, 0x7C):
-        handler('ed', code, ['neg.b d7', 'move.w sr,d3'])
+        handler('ed', code, ['neg.b d7', 'GETF d3'])
     for code in (0x45, 0x55, 0x65, 0x75):                     # RETN
         handler('ed', code, ['move.b ST_IFF2(a6),ST_IFF1(a6)', 'DORET'])
     for code in (0x4D, 0x5D, 0x6D, 0x7D):                     # RETI
@@ -366,7 +366,7 @@ def gen_ed():
     # block compares
     for code, step, rep in ((0xA1, 'addq', False), (0xA9, 'subq', False),
                             (0xB1, 'addq', True), (0xB9, 'subq', True)):
-        body = ['move.b (a5,d6.l),d2', 'cmp.b d2,d7', 'move.w sr,d1',
+        body = ['move.b (a5,d6.l),d2', 'cmp.b d2,d7', 'GETF d1',
                 '%s.w #1,d6' % step, 'subq.w #1,d4']
         fin = ['and.b #$0c,d1', 'and.b #$01,d3', 'or.b d1,d3',
                'tst.w d4', 'beq.s .z', 'or.b #2,d3', '.z:']

@@ -1,0 +1,13 @@
+# ACEGEM: boot to the prompt, type, Control+Q
+wait 20
+shot
+type 1 2 + ._
+wait 2
+type vlist_
+wait 3
+shot
+down 0x1d
+key 0x10
+up 0x1d
+wait 3
+shot

@@ -1,0 +1,8 @@
+wait 4
+shot
+wait 1.5
+shot
+wait 1.5
+shot
+wait 1.5
+shot

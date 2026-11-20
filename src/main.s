@@ -18,6 +18,7 @@
 start:
         movea.l 4(sp),a0                    ; basepage
         lea     mystack_top,sp
+        move.l  sp,run_sp                   ; the Ace's stack (kernel resets)
         lea     $81(a0),a1                  ; command line: a file name
         moveq   #0,d1
         move.b  $80(a0),d1
@@ -105,39 +106,7 @@ start:
         move.w  #$ffff,ram_last             ; 51K (all 48K of expansion)
         jsr     inf_start                   ; or what ACE.INF says
 
-        ; tape traps: ED FC C9 at 18A7 (load), ED FD C9 at 1820 (save)
-        lea     mem,a0
-        move.b  #$ed,$18a7(a0)
-        move.b  #$fc,$18a8(a0)
-        move.b  #$c9,$18a9(a0)
-        move.b  #$ed,$1820(a0)
-        move.b  #$fd,$1821(a0)
-        move.b  #$c9,$1822(a0)
-        ; native keyboard scan: ED FE C9 at 0336 (see kb_scan);
-        ; -DNOKBSCAN keeps the ROM one (for speed comparisons)
-        ifnd NOKBSCAN
-        move.b  #$ed,$0336(a0)
-        move.b  #$fe,$0337(a0)
-        move.b  #$c9,$0338(a0)
-        endif
-        ; native Forth checks + NEXT: ED FF at 04C8 (see forth_next);
-        ; -DNOFNEXT keeps the ROM code
-        ifnd NOFNEXT
-        move.b  #$ed,$04c8(a0)
-        move.b  #$ff,$04c9(a0)
-        endif
-        ; native Forth data stack pop of BC: ED FB at 084E (see ds_popbc)
-        move.b  #$ed,$084e(a0)
-        move.b  #$fb,$084f(a0)
-        ; BEEP on the YM2149: ED FA at 0BAF (see beep); -DNOSOUND keeps
-        ; the ROM loop (silent)
-        ifnd NOSOUND
-        move.b  #$ed,$0baf(a0)
-        move.b  #$fa,$0bb0(a0)
-        endif
-
-        jsr     keys_up
-        move.w  #-1,tape_fh
+        jsr     kernel_init                 ; ROM patches, natab, keys up
 
         ; command line file: a snapshot starts at once, anything else is
         ; the tape
@@ -219,41 +188,10 @@ start:
         move.l  #trace_in,trace_inp
         endif
 
-        ifnd    NONATIVE
-        jsr     native_init
-        endif
         tst.l   snap_buf                    ; snapshot from the command line
-        beq.s   z80_reset
-        jmp     snap_start
-
-; Z80 reset, as at power on: everything above the ROM reads $FF (like xAce;
-; also where there is no RAM), the machine state cleared, PC = 0, a3 = last
-; RAM address from ram_last.  Also the settings dialog's Reset (and RAM
-; size change): the stack starts again at the top.
-z80_reset:
-        lea     mystack_top,sp
-        lea     mem+8192,a0
-        move.w  #(57344/4)-1,d0
-.fill:  move.l  #-1,(a0)+
-        dbra    d0,.fill
-        lea     state,a6
-        moveq   #ST_SIZE-1,d0
-.st:    clr.b   (a6,d0.w)
-        dbra    d0,.st
-        st      ST_REDRAW(a6)
-        jsr     keys_up
-        movea.w ram_last,a3
-        lea     mem,a5
-        lea     slot_base+$8000,a4          ; slot_mid
-        movea.l a5,a0                       ; PC = 0
-        movea.l a5,a1
-        adda.l  #65536,a1                   ; SP = 0
-        moveq   #0,d3
-        moveq   #0,d4
-        moveq   #0,d5
-        moveq   #0,d6
-        moveq   #0,d7
-        NEXT
+        bne.s   .snap
+        jmp     z80_reset
+.snap:  jmp     snap_start
 
 ; fatal message (pea already pushed), wait for a key, exit
 fail:
@@ -266,7 +204,8 @@ fail:
         bra.s   leave
 
 shutdown:
-        jsr     beep_off
+host_exit:                                  ; kernel: trace end, bad opcode
+        jsr     host_snd_off
         jsr     pal_tos
 .rel:   tst.b   ctrl_down                   ; wait until Control and Q are up,
         bne.s   .rel                        ; so no key reaches the desktop
@@ -308,7 +247,9 @@ host_service:
         beq.s   .nd
         jsr     dialog                      ; Undo: settings
         subq.w  #DLG_RESET,d0
-        beq     z80_reset
+        bne.s   .rs
+        jmp     z80_reset
+.rs:
         subq.w  #DLG_SNAP-DLG_RESET,d0
         bne.s   .dc
         jmp     snap_start
@@ -529,9 +470,47 @@ pal_set:
 .no:    rts
 
 ; ---------------------------------------------------------------------------
+; Sound hooks for the kernel's BEEP (host.i): YM channel A.  Both keep all
+; registers but d0.
+; ---------------------------------------------------------------------------
+
+; tone of period d0.w (1..4095, YM units of 8 us) on channel A
+host_snd_on:
+        move.w  sr,-(sp)
+        or.w    #$0700,sr                   ; TOS writes the YM in its VBL
+        move.b  #0,$ffff8800.w
+        move.b  d0,$ffff8802.w
+        lsr.w   #8,d0
+        move.b  #1,$ffff8800.w
+        move.b  d0,$ffff8802.w
+        move.b  #8,$ffff8800.w
+        move.b  #BEEPVOL,$ffff8802.w
+        move.b  #7,$ffff8800.w              ; mixer: tone A only, keep the
+        move.b  $ffff8800.w,d0              ; port direction bits
+        and.b   #$c0,d0
+        or.b    #$3e,d0
+        move.b  d0,$ffff8802.w
+        move.w  (sp)+,sr
+        rts
+
+; channel A silent
+host_snd_off:
+        move.w  sr,-(sp)
+        or.w    #$0700,sr
+        move.b  #8,$ffff8800.w
+        move.b  #0,$ffff8802.w
+        move.b  #7,$ffff8800.w
+        move.b  $ffff8800.w,d0
+        or.b    #$3f,d0
+        move.b  d0,$ffff8802.w
+        move.w  (sp)+,sr
+        rts
+
+; ---------------------------------------------------------------------------
 ; Interrupt handlers
 ; ---------------------------------------------------------------------------
 timerc_isr:
+        addq.l  #1,ticks200                 ; 200 Hz clock for the kernel
         subq.b  #1,tc_div
         bne.s   .chain
         move.b  #4,tc_div
@@ -570,7 +549,7 @@ ikbd_isr:
         st      dlg_req
         and.b   #$7f,d1
 .jst:   move.b  d1,(a0,d0.w)
-        bsr     joy_update
+        jsr     joy_update
         bra.s   .loop
 .nojoy: tst.b   ikbd_skip
         beq.s   .nopkt
@@ -641,98 +620,16 @@ ikbd_isr:
         beq.s   .map
         st      open_flag
         bra     .loop
-.map:   moveq   #0,d2
-        move.b  d1,d2
-        and.w   #$7f,d2
-        lsl.w   #2,d2
-        lea     keymap,a0
-        adda.w  d2,a0
-        lea     kbrows,a1
-        moveq   #1,d3                       ; two key/mask pairs per entry
-.pair:  moveq   #0,d0
-        move.b  (a0)+,d0
-        move.b  (a0)+,d2
-        cmp.b   #8,d0
-        bcc.s   .skip
-        tst.b   d1                          ; bit 7 = break code
-        bmi.s   .brk
-        not.b   d2
-        and.b   d2,(a1,d0.w)                ; key down: clear the bit
-        bra.s   .skip
-.brk:   or.b    d2,(a1,d0.w)                ; key up: set the bit
-.skip:  dbra    d3,.pair
-        bsr.s   keys_merge
+.map:   jsr     key_event
         bra     .loop
 .done:  bclr    #6,$fffffa11.w              ; end of interrupt (MFP ISRB bit 6)
         movem.l (sp)+,d0-d3/a0-a2
         rte
 
-; The Ace sees keyrows = keyboard (kbrows) AND joystick (joyrows), so the
-; stick and the keys do not release each other's keys.
-keys_merge:
-        move.l  kbrows,d0
-        and.l   joyrows,d0
-        move.l  d0,keyrows
-        move.l  kbrows+4,d0
-        and.l   joyrows+4,d0
-        move.l  d0,keyrows+4
-        rts
-
-; joystick state changed (either port): the keys of joy_map for up, down,
-; left, right, fire (ST scancodes, pressed through keymap like real keys)
-joy_update:
-        moveq   #-1,d0
-        move.l  d0,joyrows
-        move.l  d0,joyrows+4
-        move.b  joy_port,d3
-        or.b    joy_port+1,d3
-        lea     joy_map,a1
-        lea     joy_bits,a0
-        moveq   #4,d2
-.dir:   move.b  (a0)+,d0
-        btst    d0,d3
-        beq.s   .next
-        moveq   #0,d1
-        move.b  (a1),d1
-        lsl.w   #2,d1
-        movem.l d2/a0,-(sp)
-        lea     keymap,a0
-        adda.w  d1,a0
-        moveq   #1,d1
-.pair:  moveq   #0,d0
-        move.b  (a0)+,d0
-        move.b  (a0)+,d2
-        cmp.b   #8,d0
-        bcc.s   .np
-        not.b   d2
-        lea     joyrows,a2
-        and.b   d2,(a2,d0.w)
-.np:    dbra    d1,.pair
-        movem.l (sp)+,d2/a0
-.next:  addq.l  #1,a1
-        dbra    d2,.dir
-        bra     keys_merge
-
-; all Ace keys up (keyboard and joystick)
-keys_up:
-        moveq   #-1,d0
-        lea     keyrows,a0
-        moveq   #5,d1
-.cl:    move.l  d0,(a0)+
-        dbra    d1,.cl
-        clr.w   joy_port
-        clr.b   joy_hdr
-        rts
-
-joy_bits:
-        dc.b    0,1,2,3,7                   ; IKBD: up, down, left, right, fire
-        even
 
 ; ---------------------------------------------------------------------------
-        include "z80core.s"
-        include "native.s"
+        include "kernel.i"
         include "video.s"
-        include "tape.s"
         include "gem.s"
         include "dialog.s"
 
@@ -745,10 +642,6 @@ skiptab:
 
 romname:  dc.b  "ACE.ROM",0
 argtest:  dc.b  "SNAP.ACE",0
-joy_map:  dc.b  $08,$07,$06,$09,$0b         ; keys 7 6 5 8 0 (up down left
-          even                              ; right fire), ACE.INF can change
-tapename: dc.b  "TAPE.ACE",0                ; path of the tape file
-          dcb.b 160,0
 shot_name: dc.b "ACE_0001.DOO",0
 tape_mask: dc.b "*.*",0
 tape_title: dc.b "Tape file",0
@@ -758,13 +651,6 @@ snap_title: dc.b "Load snapshot",0
 aes_pb:   dc.l  aes_control,aes_global,aes_intin,aes_intout,aes_addrin,aes_addrout
 msg_rez:  dc.b  "ACE-ST needs ST high or medium res.",13,10,0
 msg_rom:  dc.b  "Cannot read ACE.ROM (8192 bytes).",13,10,0
-badmsg:   dc.b  "Unimplemented Z80 opcode, PC="
-badpc:    dc.b  "0000",13,10,0
-hexchars: dc.b  "0123456789ABCDEF"
-tracename: dc.b "TRACE.BIN",0
-tracename2: dc.b "TRACEINT.BIN",0
-tracename3: dc.b "TRACEMEM.BIN",0
-tracename4: dc.b "TRACEIN.BIN",0
           even
 kbpic:    incbin "kbpic.bin"                ; tools/kbpic.py, from EightyOne
           even
@@ -781,17 +667,6 @@ msg_mem:  dc.b  "Not enough memory for the trace buffer.",13,10,0
         section bss,bss
 
         even
-mem:         ds.b 65536+64
-state:       ds.b ST_SIZE+12
-        even
-shadow:      ds.b 768
-expand:      ds.b 512
-        even
-keyrows:     ds.b 8                         ; $ff = key up, set at start
-kbrows:      ds.b 8                         ; the keyboard's part
-joyrows:     ds.b 8                         ; the joystick's part
-joy_port:    ds.b 2                         ; IKBD joystick state, ports 0/1
-joy_hdr:     ds.b 1                         ; $FE/$FF: next byte is a joystick
         even
 mystack:     ds.b 2048
 mystack_top:
@@ -799,13 +674,8 @@ scr_ptr:     ds.l 1
 old_ssp:     ds.l 1
 old_timerc:  ds.l 1
 old_ikbd:    ds.l 1
-tape_fh:     ds.w 1
-tape_tmp:    ds.b 4
-tape_eof:    ds.b 1
-tape_hdr_done: ds.b 1
 tc_div:      ds.b 1
 svc_tick:    ds.b 1
-quit_flag:   ds.b 1
 open_flag:   ds.b 1
 help_req:    ds.b 1
 any_key:     ds.b 1
@@ -818,8 +688,6 @@ shot_req:    ds.b 1
 aes_init:    ds.b 1
 medium:      ds.b 1                         ; $ff: ST medium
         even
-ram_last:    ds.w 1                         ; last RAM address (see a3)
-        even
 old_pal:     ds.w 4
         even
 aes_control: ds.w 6
@@ -831,10 +699,6 @@ aes_addrout: ds.l 2
 fs_path:     ds.b 160                       ; file selector path + mask
 fs_file:     ds.b 16                        ; and file name
 fs_full:     ds.b 176                       ; path + name picked
-snap_buf:    ds.l 1                         ; unpacked snapshot (Malloc)
-snap_len:    ds.l 1                         ; bytes in the file (from 2000)
-RDBUF equ 2048
-rd_buf:      ds.b RDBUF
 arg_name:    ds.b 128                       ; command line file
 rsc_tree:    ds.l 1                         ; settings dialog (ACE.RSC)
 dlg_x:       ds.w 4                         ; its rectangle
@@ -848,23 +712,7 @@ dlg_joy:     ds.b 5                         ; joystick scancodes in the dialog
         even
 ikbd_skip:   ds.b 1
         even
-icount:      ds.l 1                         ; ICOUNT build: instructions
-iframes:     ds.l 1                         ; and 50 Hz ticks
-trace_intf:  ds.b 1
-trace_nat:   ds.b 1
-        even
-trace_buf:   ds.l 1
-trace_ptr:   ds.l 1
-trace_end:   ds.l 1
-        ifd     TRACE
-trace_cnt:   ds.l 1
-trace_evp:   ds.l 1
-TRACEEVB equ 24*24000
-trace_ev:    ds.b TRACEEVB
-trace_inp:   ds.l 1
-trace_in:    ds.b 262144
-        endif
-        even
 shot_buf:    ds.b 32000                     ; screenshot (640x400 mono)
         even
-natab:       ds.l 8192                      ; native Forth words by ROM address
+
+        include "kdata.s"

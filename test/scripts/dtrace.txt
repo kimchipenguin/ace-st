@@ -1,0 +1,20 @@
+wait 15
+type load daleks_
+wait 5
+type glyphs 1234 seed !_
+wait 2
+type : tt 3 0 do 19 level ! setup_
+wait 2
+type 15 0 do turn loop loop ;_
+wait 2
+type : b 15403 @ tt_
+wait 2
+type 15403 @ swap - . ;_
+wait 2
+shot
+type b_
+ff on
+wait 90
+ff off
+wait 2
+shot

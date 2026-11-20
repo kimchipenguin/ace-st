@@ -12,3 +12,7 @@ test/.hatari-home/
 session-export-*/
 testgame/
 .DS_Store
+
+# GEM version build outputs
+*.APP
+gem/build/

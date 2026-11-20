@@ -1,0 +1,6 @@
+wait 10
+type 1 2 + ._
+wait 2
+type vlist_
+wait 4
+shot

@@ -26,12 +26,15 @@ unsigned long tstates, tsmax = 0xffffffffUL;
 static unsigned long tstart, kbsteps, kbcalls, kbts, fnsteps, fncalls, fnts, dscalls;
 static unsigned long natsteps, natcalls, natts, beeps;
 
-/* Native Forth words (src/native.s natlist): ACE-ST runs the word at one of
+/* Native Forth words (src/kernel/native.s natlist): ACE-ST runs the word at one of
  * these code addresses in one step when it gets there through its native
  * NEXT (forth_next, or the end of another native word).  The step ends
  * after the word's JP (IY), or after the JP (HL) at 04C5 of the ROM's NEXT. */
 static const unsigned short natives[] = {
-  0x0898, 0x08a7, 0x12eb, 0x0e21, 0x1013, 0x133e, 0x0ec3, 0x04b8 };
+  0x0898, 0x08a7, 0x12eb, 0x0e21, 0x1013, 0x133e, 0x0ec3, 0x04b8,
+  0x086d, 0x087b, 0x0887, 0x08b5, 0x08c3, 0x08d4, 0x08e1, 0x08f0,
+  0x0c1c, 0x0c30, 0x0c58, 0x0dd4, 0x0e38, 0x0e4d, 0x0dab, 0x0fec,
+  0x0ff0, 0x0ff5, 0x128f, 0x1278, 0x1325, 0x1334, 0x0caa };
 static int is_native(unsigned short a)
 {
   unsigned k;
@@ -57,7 +60,7 @@ void do_interrupt(void) {}
 void fix_tstates(void) { tstates = 0; }
 #define parity(a) (partable[a])
 
-/* Tape traps with ACE-ST's rules (src/tape.s).  xAce's tape.c misreads the
+/* Tape traps with ACE-ST's rules (src/kernel/tape.s).  xAce's tape.c misreads the
  * end of the tape in tape_skip_block (EOF -> length -257, seeks backwards),
  * so a search for a missing file went somewhere else there. */
 static FILE *tfp;

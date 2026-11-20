@@ -6,20 +6,21 @@
 #   make oracle     host checker for traces (xAce's Z80 core)
 #   make rsc        ACE.RSC + src/rsc.i from tools/mkrsc.py (overwrites edits)
 #   make daleks     examples/DALEKS.TAP + DALEKS.ACE (Forth game, typed in by tools/acetype)
+#   make gem        ACEGEM.APP, the GEM version (gem/, m68k-atari-mint-gcc)
 VASM   ?= $(HOME)/Develop/vasm-src/vasm/vasmm68k_mot
 TRACEN ?= 150000
 TRACESKIP ?= 0
 HATARI ?= hatari
 
-GEN = src/z80ops.s src/tables.s src/kbpic.bin src/logo.bin src/kbmed.bin src/logomed.bin
-SRCS = $(wildcard src/*.s) src/rsc.i
+GEN = src/kernel/z80ops.s src/kernel/tables.s src/kbpic.bin src/logo.bin src/kbmed.bin src/logomed.bin
+SRCS = $(wildcard src/*.s src/kernel/*.s) src/rsc.i
 
 all: ACE.PRG
 
 trace: ACETRACE.PRG
 count: ACECOUNT.PRG
 
-src/z80ops.s src/tables.s: tools/gen_z80.py
+src/kernel/z80ops.s src/kernel/tables.s: tools/gen_z80.py
 	python3 tools/gen_z80.py
 
 src/kbpic.bin: tools/kbpic.py assets/keyboardJupiterAce.bmp
@@ -36,13 +37,13 @@ src/logomed.bin: tools/medpic.py assets/logo-med.pgm
 	python3 tools/medpic.py pgm assets/logo-med.pgm $@
 
 ACE.PRG: $(SRCS) $(GEN)
-	$(VASM) -Ftos -m68000 -Isrc -o $@ src/main.s
+	$(VASM) -Ftos -m68000 -Isrc -Isrc/kernel -o $@ src/main.s
 
 ACETRACE.PRG: $(SRCS) $(GEN) FORCE
-	$(VASM) -Ftos -m68000 -Isrc -DTRACE=$(TRACEN) -DTRACESKIP=$(TRACESKIP) $(TRACEFLAGS) -o $@ src/main.s
+	$(VASM) -Ftos -m68000 -Isrc -Isrc/kernel -DTRACE=$(TRACEN) -DTRACESKIP=$(TRACESKIP) $(TRACEFLAGS) -o $@ src/main.s
 
 ACECOUNT.PRG: $(SRCS) $(GEN)
-	$(VASM) -Ftos -m68000 -Isrc -DICOUNT=1 -o $@ src/main.s
+	$(VASM) -Ftos -m68000 -Isrc -Isrc/kernel -DICOUNT=1 -o $@ src/main.s
 
 # settings dialog: not part of "all", so changes made to ACE.RSC with a
 # resource editor stay (src/rsc.i must keep matching its objects)
@@ -64,8 +65,40 @@ test/oracle/oracle: test/oracle/oracle.c xAce/src/z80ops.c
 run: ACE.PRG
 	$(HATARI) --monitor mono --machine st --fast-boot true -d . ACE.PRG
 
-clean:
-	rm -f ACE.PRG ACETRACE.PRG ACECOUNT.PRG test/oracle/oracle tools/acetype
+# ACEGEM.APP: gem/glue.s (kernel + glue) is assembled twice: the listing of
+# the first run gives build/flagtab.i (tools/flagtab.py), the GETF sites
+# that are patched to move ccr on 68010 and later.
+CROSS   ?= m68k-atari-mint-
+GB       = gem/build
+GVFLAGS  = -Faout -mid=0 -m68000 -quiet -DGEMAPP -Isrc/kernel -I$(GB)
+GCFLAGS  = -m68000 -O2 -fomit-frame-pointer -Wall -Igem
+KSRCS    = gem/glue.s $(wildcard src/kernel/*.s) src/kernel/kernel.i src/kernel/host.i
 
-.PHONY: all trace count oracle rsc daleks run clean FORCE
+gem: ACEGEM.APP
+
+$(GB)/glue1.lst: $(KSRCS)
+	@mkdir -p $(GB)
+	$(VASM) $(GVFLAGS) -L $@ -o $(GB)/glue1.o gem/glue.s
+
+$(GB)/flagtab.i: $(GB)/glue1.lst tools/flagtab.py
+	python3 tools/flagtab.py $< $@
+
+$(GB)/glue.o: $(KSRCS) $(GB)/flagtab.i
+	$(VASM) $(GVFLAGS) -DFLAGTAB -o $@ gem/glue.s
+
+$(GB)/%.o: gem/%.c gem/kernel.h
+	@mkdir -p $(GB)
+	$(CROSS)gcc $(GCFLAGS) -c $< -o $@
+
+ACEGEM.APP: $(GB)/glue.o $(GB)/acegem.o
+	$(CROSS)gcc -m68000 -o $@ $(GB)/acegem.o $(GB)/glue.o -lgem
+	$(CROSS)strip $@
+	$(CROSS)stack -s --size=32768 $@ >/dev/null
+	$(CROSS)flags -S $@ >/dev/null
+
+clean:
+	rm -f ACE.PRG ACETRACE.PRG ACECOUNT.PRG ACEGEM.APP test/oracle/oracle tools/acetype
+	rm -rf $(GB)
+
+.PHONY: all trace count oracle rsc daleks run gem clean FORCE
 FORCE:

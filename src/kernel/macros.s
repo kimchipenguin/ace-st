@@ -54,6 +54,23 @@ ST_VDIRTY equ 19           ; b   video RAM written since the last refresh
 ST_SIZE   equ 20
 
 ; ---------------------------------------------------------------------------
+; GETF dn: the flags after an operation, move.w sr,dn.  That is privileged
+; on the 68010 and later, where ACEGEM runs the kernel in user mode, so
+; ACEGEM rewrites each one to move.w ccr,dn ($40Cx -> $42Cx) at start.  The
+; GEMAPP build labels every site (.gf_nnnnnn) for that patch table, made
+; from the assembler listing; gfcnt counts them.  ACE.PRG runs in
+; supervisor mode and keeps move sr.
+; ---------------------------------------------------------------------------
+gfcnt   set     0
+GETF    macro
+        ifd     GEMAPP
+.gf\@:
+        endif
+        move.w  sr,\1
+gfcnt   set     gfcnt+1
+        endm
+
+; ---------------------------------------------------------------------------
 ; dispatch
 ; ---------------------------------------------------------------------------
 NEXT    macro
@@ -230,7 +247,7 @@ SETX    macro
 
 ; INC/DEC r: take N,Z,V from the CCR, keep the old carry
 INCFLAGS macro
-        move.w  sr,d0
+        GETF    d0
         and.b   #$0e,d0
         and.b   #$01,d3
         or.b    d0,d3
@@ -238,7 +255,7 @@ INCFLAGS macro
 
 ; RLCA/ADD HL,rr etc.: take only C from the CCR, keep N,Z,V
 CFLAG   macro
-        move.w  sr,d0
+        GETF    d0
         and.b   #$01,d0
         and.b   #$0e,d3
         or.b    d0,d3
@@ -247,7 +264,7 @@ CFLAG   macro
 ; flags for IN r,(C): N,Z from d2, parity into V, carry kept
 INFLAGS macro
         tst.b   d2
-        move.w  sr,d0
+        GETF    d0
         and.b   #$0c,d0
         and.b   #$01,d3
         or.b    d0,d3
@@ -257,7 +274,7 @@ INFLAGS macro
 ; LD A,I / LD A,R flags (d7 loaded): N,Z, V = IFF2, carry kept
 LDAIR   macro
         tst.b   d7
-        move.w  sr,d0
+        GETF    d0
         and.b   #$0c,d0
         and.b   #$01,d3
         or.b    d0,d3
@@ -335,38 +352,38 @@ PUT_A   macro
 ; ---------------------------------------------------------------------------
 A_ADD   macro
         add.b   d2,d7
-        move.w  sr,d3
+        GETF    d3
         endm
 A_ADC   macro
         SETX
         addx.b  d2,d7
-        move.w  sr,d3
+        GETF    d3
         endm
 A_SUB   macro
         sub.b   d2,d7
-        move.w  sr,d3
+        GETF    d3
         endm
 A_SBC   macro
         SETX
         subx.b  d2,d7
-        move.w  sr,d3
+        GETF    d3
         endm
 A_AND   macro
         and.b   d2,d7
-        move.w  sr,d3
+        GETF    d3
         PAR     d7
         endm
 A_XOR   macro
         eor.b   d2,d7
-        move.w  sr,d3
+        GETF    d3
         PAR     d7
         endm
 A_OR    macro
         or.b    d2,d7
-        move.w  sr,d3
+        GETF    d3
         PAR     d7
         endm
 A_CP    macro
         cmp.b   d2,d7
-        move.w  sr,d3
+        GETF    d3
         endm

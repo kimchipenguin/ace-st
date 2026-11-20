@@ -30,6 +30,10 @@ format is the same as .TAP) and plays.
   NEXT ~50%, handler slots instead of a dispatch table ~52%, byte moves through the stack
   instead of 8-bit shifts and `JP (IY)` straight into `forth_next` ~56%, native Forth
   words ~85%.
+- **Daleks benchmark** (`test/scripts/dbench.txt`: three rounds of 15 turns on level 19, timed
+  with the Ace's FRAMES counter): a real Ace (acetype, the same Z80 core) takes 2185 frames;
+  ACE-ST took 3253 (67%) before the Daleks words below were native and takes 2036 now (107%).
+  The number is printed after the game screen, so its first digit lands at the end of row 0.
 - **Native keyboard scan:** `ED FE C9` at 0x0336 replaces the ROM routine (85 Z80 instructions,
   640 T-states per call; the game calls it about 3.7 times per frame) with 68000 code that
   returns the same registers and flags. `-DNOKBSCAN` keeps the ROM routine, for comparisons.
@@ -49,7 +53,10 @@ format is the same as .TAP) and plays.
 - **Native Forth words:** after NEXT has found the next word's code address (`fn_hl`, shared by
   `forth_next` and the ROM's NEXT at 0x04BA), `natab` (one long per address below 0x2000) gives
   a 68000 routine for the busiest words in Ace Invaders: `C@`, `C!`, `I`, `1-`, number literal,
-  the `+LOOP` runtime, DOCOL (start of every colon definition) and EXIT (`src/native.s`). Each
+  the `+LOOP` runtime, DOCOL (start of every colon definition) and EXIT (`src/kernel/native.s`), and
+  in Daleks: `DUP`, `DROP`, `SWAP`, `@`, `!`, `>R`, `R>`, `?DUP`, `0=`, `0<`, `>`, `+`, `AND`,
+  `OR`, `NEGATE`, `U*`, 0BRANCH, BRANCH, the `DO` and `LOOP` runtimes and the CREATE/VARIABLE
+  and CONSTANT runtimes (found with a word profile of a few game turns in acetype). Each
   leaves the registers, flags, data stack and the bytes below the Z80 SP as the ROM code does;
   words that end in `JP (IY)` go straight on into `forth_next`, the others into NEXT. In the game
   loop these words took most of the time. `-DNONATIVE` leaves them out.
@@ -153,6 +160,9 @@ file` (.ace snapshot), `#ram n`, `#noerr`. It is also handy for trying out Forth
 - `test/scripts/beep.txt`: a 3 s BEEP with YM register dumps (`dbg info ym`) during and after;
   `beepbrk.txt`: Space during a beep (ERROR 3); `beeptrace.txt`: BEEPs for the oracle (windows
   at `TRACESKIP=400000` and `800000` hold 2 and 20 beeps).
+- `test/scripts/dtrace.txt` (`TAPE=examples/DALEKS.TAP KEYDELAY=0.2`): the Daleks benchmark
+  for the oracle; windows at `TRACESKIP=1600000`, `1900000` and `2200000` run all the Daleks
+  words. `ctrace.txt`: a CONSTANT in a DO LOOP (`TRACESKIP=500000`).
 - `test/scripts/brk.txt`: stack underflow (ERROR 2), arithmetic, BREAK out of an endless loop
   (ERROR 3); `brktrace.txt` is the same for the oracle (`TRACESKIP=1500000`).
 - Profile: `test/run.sh samp test/scripts/gsample.txt` takes 800 register dumps in the game,
@@ -179,6 +189,14 @@ file` (.ace snapshot), `#ram n`, `#noerr`. It is also handy for trying out Forth
 - The settings dialog is tested in mono and medium on TOS 1.04 (RAM change + reset, joystick
   keys, ACE.INF save/load, snapshot load, not-a-snapshot alert, missing ACE.RSC alert, Quit).
 - The rig's `type` sends punctuation (`. + : * - = ; , / "`) as Alt (= Symbol Shift) + key.
+- ACEGEM: `APP=$PWD/ACEGEM.APP PRGNAME=ACEGEM.APP test/run.sh <name> <script>`; `MACHINE`
+  (st/ste/tt/falcon) and `MONITOR` (mono/rgb/vga) pick the machine. Give the desktop about 15 s
+  before the first key (keys typed earlier go to TOS). `gemtype4.txt` types `1 2 + .`;
+  `game.txt` and `daleks.txt` run as for ACE.PRG. Checked so far: TOS 1.04 mono (prompt, typing,
+  Ace Invaders, Daleks, Control+Q), TOS 2.06 STE medium, Falcon TOS 4.04 (68030: the `move ccr`
+  patch), EmuTOS 16 colours 1024x768 (`--vdi-planes 4 --vdi-width 1024 --vdi-height 768`).
+- A STATS build (`-DSTATS`) shows frames, event ticks and drawing ticks per second in the window
+  title. Hatari's `--trace cpu_exception` names the PC of a bomb (it found a wrong XBIOS number).
 
 ## Build and run
 
@@ -200,26 +218,51 @@ high (640x400 mono) or ST medium (640x200). `ACE.RSC` (the settings
 dialog) belongs next to ACE.PRG too; `make rsc` rebuilds it and `src/rsc.i` from
 `tools/mkrsc.py` (this overwrites changes made with a resource editor).
 
+### ACEGEM.APP (GEM version, in progress)
+
+```
+make gem                             # -> ACEGEM.APP (needs m68k-atari-mint-gcc)
+```
+
+A GEM application for any resolution and colour depth, also under MagiC and MiNT: the Ace
+screen in a window at the largest integer scale that fits. `ACE.ROM` is read from the current
+directory (next to the program when started from the desktop). Control+Q quits. The Ace runs only while its window is on top. The
+keyboard comes from an XBRA hook on the IKBD vector while the window is on top (TOS keeps the
+mouse); on machines without an ACIA (MagiC Mac/PC) AES key events stand in. 68000 to 68060;
+on ColdFire it says so and quits. No menus, sound or full screen yet.
+
 ## Layout
+
+The kernel in `src/kernel/` is shared by ACE.PRG and the coming GEM version (ACEGEM.APP);
+`src/kernel/host.i` lists what a front end must provide. The rest of `src/` is the ACE.PRG
+front end.
 
 | File | Purpose |
 |---|---|
-| `tools/gen_z80.py` | Generates `src/z80ops.s` (all opcode handlers and tables) and `src/tables.s` (parity, keymap) |
-| `src/macros.s` | Register allocation, dispatch, flag and operand macros |
-| `src/z80core.s` | Store/mirroring, port I/O, 50 Hz interrupt delivery, support routines |
-| `src/video.s` | 2x scaled mono blit from video and character RAM |
-| `src/tape.s` | ROM-trap tape load/save via GEMDOS (`ED FC C9` at 0x18A7, `ED FD C9` at 0x1820), Control+O file selector |
-| `src/z80core.s` `kb_scan` | Native ROM keyboard scan (`ED FE C9` at 0x0336) |
-| `src/z80core.s` `forth_next` | Native Forth checks + NEXT (`ED FF` at 0x04C8) |
-| `src/z80core.s` `ds_push` etc. | Native Forth data stack (`RST 10`, `RST 18`, `ED FB` at 0x084E) |
-| `src/z80core.s` `beep` | BEEP on YM2149 channel A (`ED FA` at 0x0BAF) |
-| `src/native.s` | Native Forth words, looked up in `natab` by `fn_hl` |
-| `src/gem.s` | GEM sessions (enter/leave, mouse, file selector), .ace snapshot reader and start |
+| `tools/gen_z80.py` | Generates `src/kernel/z80ops.s` (all opcode handlers and tables) and `src/kernel/tables.s` (parity, keymap) |
+| `src/kernel/macros.s` | Register allocation, dispatch, flag and operand macros, `GETF` (flag reads) |
+| `src/kernel/z80core.s` | Store/mirroring, port I/O, 50 Hz interrupt delivery, support routines |
+| `src/kernel/z80core.s` `kb_scan` | Native ROM keyboard scan (`ED FE C9` at 0x0336) |
+| `src/kernel/z80core.s` `forth_next` | Native Forth checks + NEXT (`ED FF` at 0x04C8) |
+| `src/kernel/z80core.s` `ds_push` etc. | Native Forth data stack (`RST 10`, `RST 18`, `ED FB` at 0x084E) |
+| `src/kernel/z80core.s` `beep` | BEEP (`ED FA` at 0x0BAF), the tone through the front end's `host_snd_on` |
+| `src/kernel/native.s` | Native Forth words, looked up in `natab` by `fn_hl` |
+| `src/kernel/entry.s` | Z80 reset |
+| `src/kernel/keys.s` | ST scancodes and joystick to the Ace key matrix |
+| `src/kernel/render.s` | Changed Ace cells to 1-bit pixels (`REFRESH` macro) |
+| `src/kernel/tape.s` | ROM-trap tape load/save via GEMDOS (`ED FC C9` at 0x18A7, `ED FD C9` at 0x1820) |
+| `src/kernel/snap.s` | .ace snapshot reader and start |
+| `src/kernel/kdata.s` | Kernel data and BSS |
+| `src/video.s` | ST high / medium screen layout for `REFRESH` |
+| `src/gem.s` | GEM sessions (enter/leave, mouse, file selector), Control+O tape selector |
 | `src/dialog.s` | Undo settings dialog, ACE.INF load/save |
 | `tools/mkrsc.py` | Writes `ACE.RSC` and `src/rsc.i` |
 | `tools/acetype.c` | Headless Ace that types Forth source in (`make daleks`); `tools/acekeys.inc` is xAce's key table |
 | `examples/` | Daleks in Ace Forth, with tape and snapshot |
-| `src/main.s` | Startup, logo screen, IKBD and Timer C handlers, Help keyboard picture, data |
+| `src/main.s` | Startup, logo screen, IKBD and Timer C handlers, sound hooks (YM), Help keyboard picture, data |
+| `gem/glue.s` | ACEGEM: the kernel plus C wrappers, Timer C and IKBD hooks (XBRA "AceG") |
+| `gem/acegem.c`, `gem/kernel.h` | ACEGEM front end: window, VDI drawing, keys, frame loop |
+| `tools/flagtab.py` | ACEGEM: the `GETF` sites from the first pass's listing (`gem/build/flagtab.i`); on a 68010+ they are patched to `move ccr` |
 | `tools/logo.sh` | Renders the logo in `assets/Jupiter ACE Logo.pdf` to `assets/logo.pbm` (448x103, 1 bit; needs Ghostscript and ImageMagick); `make` turns it into `src/logo.bin` |
 | `tools/kbpic.py` | Converts `assets/keyboardJupiterAce.bmp` (EightyOne) to `src/kbpic.bin` (1 bit, 512x223) |
 

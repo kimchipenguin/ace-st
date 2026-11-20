@@ -215,7 +215,7 @@ fn_chk2:  add.w   #$1e,d2                     ; HL = 1E + [3C3B]
         subq.w  #2,d0
         sub.w   d0,d2                       ; SBC HL,SP
         bcc     fn_slow
-        move    sr,d4                       ; S = N, PV = V
+        GETF    d4                          ; S = N, PV = V
         and.w   #$0a,d4
         lea     keyrows,a2
         move.b  (a2),d2                     ; IN A,(FE) with A = FE
@@ -458,7 +458,7 @@ beep:
         bls.s   .lim
         move.l  #625*65000,d1
 .lim:   add.l   #312,d1
-        divu.w  #625,d1                     ; 5 ms ticks (_hz_200)
+        divu.w  #625,d1                     ; 5 ms ticks (ticks200)
         move.w  d1,d3
         beq.s   .done                       ; under 2.5 ms: nothing to hear
         move.w  d4,d0                       ; tone period 1..4095
@@ -468,32 +468,18 @@ beep:
 .p1:    tst.w   d0
         bne.s   .p2
         moveq   #1,d0
-.p2:    move.w  sr,-(sp)
-        or.w    #$0700,sr                   ; TOS writes the YM in its VBL
-        move.b  #0,$ffff8800.w
-        move.b  d0,$ffff8802.w
-        lsr.w   #8,d0
-        move.b  #1,$ffff8800.w
-        move.b  d0,$ffff8802.w
-        move.b  #8,$ffff8800.w
-        move.b  #BEEPVOL,$ffff8802.w
-        move.b  #7,$ffff8800.w              ; mixer: tone A only, keep the
-        move.b  $ffff8800.w,d0              ; port direction bits
-        and.b   #$c0,d0
-        or.b    #$3e,d0
-        move.b  d0,$ffff8802.w
-        move.w  (sp)+,sr
+.p2:    jsr     host_snd_on                 ; front end: tone period d0
         moveq   #0,d1
         move.w  d3,d1
-        add.l   $4ba.w,d1                   ; end time
+        add.l   ticks200,d1                 ; end time
 .wait:  btst    #0,keyrows+7                ; Space (row 7F bit 0) down?
         beq.s   .brk
         tst.b   quit_flag
         bne.s   .end
-        move.l  $4ba.w,d0
+        move.l  ticks200,d0
         sub.l   d1,d0
         bmi.s   .wait
-.end:   bsr.s   beep_off
+.end:   jsr     host_snd_off
         clr.b   ST_INT(a6)                  ; ticks the Ace missed
 .done:  moveq   #0,d7                       ; A = 0
         moveq   #0,d5                       ; DE = 0
@@ -502,26 +488,13 @@ beep:
         A_OR                                ; OR E
         lea     $0bc4(a5),a0
         NEXT
-.brk:   bsr.s   beep_off
+.brk:   jsr     host_snd_off
         clr.b   ST_INT(a6)
         move.b  keyrows+7,d7                ; IN A,(FE), RRCA: carry clear
         ror.b   #1,d7
         moveq   #0,d3
         lea     $0bc7(a5),a0                ; RST 20: ERROR 3
         NEXT
-
-; channel A silent
-beep_off:
-        move.w  sr,-(sp)
-        or.w    #$0700,sr
-        move.b  #8,$ffff8800.w
-        move.b  #0,$ffff8802.w
-        move.b  #7,$ffff8800.w
-        move.b  $ffff8800.w,d0
-        or.b    #$3f,d0
-        move.b  d0,$ffff8802.w
-        move.w  (sp)+,sr
-        rts
 
 ; 50 Hz service.  Entered by jump from CHKINT / HALT with the Z80 PC already
 ; advanced; ends by continuing the dispatch loop.
@@ -671,7 +644,7 @@ trace_done:
         move.w  #$3e,-(sp)                  ; Fclose
         trap    #1
         addq.l  #4,sp
-.x:     jmp     shutdown
+.x:     jmp     host_exit
         endif
 
 ; Unimplemented opcode: report PC and leave.
@@ -687,6 +660,7 @@ unimpl:
         and.w   #$f,d1
         move.b  (a1,d1.w),(a2)+
         dbra    d2,.h
+        ifnd    GEMAPP                      ; ACEGEM: an alert (badmsg)
         pea     badmsg
         move.w  #9,-(sp)                    ; Cconws
         trap    #1
@@ -694,7 +668,8 @@ unimpl:
         move.w  #8,-(sp)                    ; Cnecin
         trap    #1
         addq.l  #2,sp
-        jmp     shutdown
+        endif
+        jmp     host_exit
 
 ; ---------------------------------------------------------------------------
 ; The handlers: main opcodes in 256-byte slots around slot_mid (64K), then

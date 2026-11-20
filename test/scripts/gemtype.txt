@@ -1,0 +1,7 @@
+wait 10
+type 1 2 + ._
+wait 2
+shot
+type 3 4 * ._
+wait 2
+shot

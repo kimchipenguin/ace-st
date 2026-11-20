@@ -1,0 +1,8 @@
+wait 12
+type 10 constant k_
+wait 2
+type : t 0 30000 0 do k + loop . ;_
+wait 2
+type t t t_
+wait 30
+shot
