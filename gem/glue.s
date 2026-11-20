@@ -17,6 +17,7 @@
         xdef    _ace_mem,_ace_state,_ace_ram_last,_ace_ticks200,_ace_shadow
         xdef    _ace_tapename,_ace_snap_buf,_ace_snap_read
         xdef    _ace_joy_map,_ace_keyname,_kernel_tape_close
+        xdef    _ace_keyrows,_kernel_matrix
         xref    _gem_frame
 
 _kernel_start:
@@ -104,6 +105,20 @@ _kernel_tape_close:
         jsr     tape_close
         movem.l (sp)+,d2-d7/a2-a6
         rts
+
+; void kernel_matrix(int row, int mask, int down): one Ace key (row 0-7 of
+; the matrix, its bit) pressed or released, as the keyboard window clicks it
+_kernel_matrix:
+        move.l  4(sp),d0
+        move.l  8(sp),d1
+        lea     kbrows,a0
+        tst.l   12(sp)
+        beq.s   .up
+        not.b   d1
+        and.b   d1,(a0,d0.w)
+        bra     keys_merge
+.up:    or.b    d1,(a0,d0.w)
+        bra     keys_merge
 
 ; int ace_snap_read(const char *name): 0 fine, -1 cannot read, -2 not a
 ; snapshot, -3 no memory
@@ -303,6 +318,7 @@ _ace_tapename   equ     tapename
 _ace_snap_buf   equ     snap_buf
 _ace_joy_map    equ     joy_map
 _ace_keyname    equ     keyname
+_ace_keyrows    equ     keyrows
 
         include "kdata.s"
 

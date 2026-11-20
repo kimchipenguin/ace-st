@@ -201,6 +201,9 @@ file` (.ace snapshot), `#ram n`, `#noerr`. It is also handy for trying out Forth
   and `gemsnap.txt` (`EXTRA="DALEKS.ACE ACEGEM.RSC"`) type a name into the file selector; the
   rig's `type` sends "." as Alt+M (Ace Symbol Shift), so a file name's dot goes as `key 0x34`.
   The RAM popup, its alert and the About box need the mouse: tested by hand.
+- Keyboard window: `gemkbd.txt` (`EXTRA=ACEGEM.RSC`): ^K, typing, Shift+A held (lit keys), ^W,
+  ^K, ^Q, then `KEYBOARD` in `ACEGEM.INF`. Checked in TOS 1.04 mono and TOS 2.06 STE medium and
+  low (`--tos-res`). Clicking keys needs the mouse: tested by hand.
 - A STATS build (`-DSTATS`) shows frames, event ticks and drawing ticks per second in the window
   title. Hatari's `--trace cpu_exception` names the PC of a bomb (it found a wrong XBIOS number).
 
@@ -239,11 +242,18 @@ ACIA (MagiC Mac/PC) AES key events stand in. 68000 to 68060; on ColdFire it says
 Menus and shortcuts: File > Open tape... **^O** (the tape for the next `LOAD`/`SAVE`), Load
 snapshot... **^L** (.ace), Save screenshot **^T** (`SCNSHT\SHOTnnnn.PNG`, 256x192, 1 bit),
 Quit **^Q**; Emulation > Reset **^R**, Pause **^P**; Options > Settings... **^S** (RAM size,
-which resets the Ace, and the joystick keys, by their ACE.INF names); **^W** closes a dialog.
+which resets the Ace, and the joystick keys, by their ACE.INF names), Keyboard **^K**; **^W**
+closes a dialog or the keyboard window.
 A menu entry or shortcut runs once all keys are up and the hook is out, so alerts, dialogs and
 file selectors get a keyboard TOS knows about. `ACEGEM.INF` (next to the program, written at
 Quit) keeps `RAM` and `JOYSTICK` as in ACE.INF, plus `WINDOW`, `SETTINGS`, `ABOUT`, `TAPES` and
-`SNAPSHOTS` (the file selectors' folders). No sound or full screen yet.
+`SNAPSHOTS` (the file selectors' folders) and `KEYBOARD x y open`. No sound or full screen yet.
+
+The keyboard window (as in sz81's Atari build) shows EightyOne's picture; the Ace keeps running
+and gets the keys while it is on top. Every key the Ace sees down (typed, clicked, joystick) is
+lit for a second after it went up: blue on the key face (red with 4 colours), inverted in mono.
+A click holds a key for at least 80 ms; SHIFT and SYMBOL SHIFT stay down until the next key.
+The picture is halved in height in ST medium, in both directions when it is too wide (ST low).
 
 ## Layout
 
@@ -277,6 +287,7 @@ front end.
 | `gem/glue.s` | ACEGEM: the kernel plus C wrappers, Timer C and IKBD hooks (XBRA "AceG") |
 | `gem/acegem.c`, `gem/kernel.h` | ACEGEM front end: window, VDI drawing, keys, frame loop |
 | `gem/aesfix.c` | ACEGEM: CF-Lib USERDEFs on an own stack, no BACKDROP gadget on old AES (from the CHIP-8 emulator) |
+| `tools/mkkbpic.py` | ACEGEM: `assets/keyboardJupiterAce.bmp` to `gem/build/kbpic.h` (1-bit words + the 40 key faces it finds) |
 | `tools/mkgemrsc.py` | Writes `ACEGEM.RSC` and `gem/build/acegem_rsc.h` (menu, Settings, About, RAM popup, texts) |
 | `tools/flagtab.py` | ACEGEM: the `GETF` sites from the first pass's listing (`gem/build/flagtab.i`); on a 68010+ they are patched to `move ccr` |
 | `tools/logo.sh` | Renders the logo in `assets/Jupiter ACE Logo.pdf` to `assets/logo.pbm` (448x103, 1 bit; needs Ghostscript and ImageMagick); `make` turns it into `src/logo.bin` |

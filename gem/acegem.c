@@ -33,6 +33,7 @@
 #include "kernel.h"
 #include "aesfix.h"
 #include "acegem_rsc.h"
+#include "kbpic.h"
 
 #define RSC_FILE "ACEGEM.RSC"
 #define INF_FILE "ACEGEM.INF"
@@ -51,6 +52,7 @@
 #define ACT_CLOSEW      1001        /* Control+W: close the dialog on top */
 
 static short vh, win = -1;
+static short kbw = -1;                      /* the keyboard window */
 static short win_kind = NAME | CLOSER | MOVER | FULLER | SIZER;
 static short pix_w = 1, pix_h = 1;          /* pixel shape, work_out[3/4] */
 static GRECT desk, wwork, wfull_old, win_place;
@@ -495,7 +497,391 @@ static int on_top(void)
 	if (win < 0)
 		return 0;
 	wind_get(0, WF_TOP, &top, &d, &d, &d);
-	return top == win;
+	return top == win || (kbw >= 0 && top == kbw);   /* both get the keys */
+}
+
+/* ---------------------------------------------------------------- */
+/* the keyboard window (as in sz81's Atari build)                    */
+/* ---------------------------------------------------------------- */
+
+/* EightyOne's picture of the Ace keyboard (gem/build/kbpic.h).  Every key
+   the Ace sees down (typed, clicked or from the joystick) is lit, and stays
+   so for a second after it went up: blue (red with 4 colours) on the key
+   face, so the white lettering stays readable, inverted in monochrome.  A
+   click holds a key for at least KB_CLICK; SHIFT and SYMBOL SHIFT stay
+   down until the next key goes up.  On small screens the picture is
+   halved: in height when the pixels are twice as high as wide (ST medium),
+   in both directions when it is too wide for the desktop.  A dark pixel
+   stays only when all of the halved pixels are dark, so the lettering
+   stays white. */
+
+#define KB_KEYS     40
+#define KB_SHIFT    30
+#define KB_SYMSHIFT 38
+#define KB_LIT      200             /* ticks: 1 s */
+#define KB_CLICK    16              /* ticks: 80 ms, the ROM must see it */
+#define KB_KIND     (NAME | CLOSER | MOVER)
+
+static short kb_x = -1, kb_y = -1;          /* place (ACEGEM.INF) */
+static short kb_reopen;                     /* was open at the last quit */
+static unsigned short *kb_pic;
+static short kb_w, kb_h, kb_words;          /* the picture as drawn */
+static short kb_r[KB_KEYS][4];              /* key faces in it */
+static short kb_pen = -1;                   /* lit keys, -1 = invert */
+static unsigned char kb_lit[KB_KEYS];
+static long kb_lit_until[KB_KEYS];
+static short kb_click = -1;                 /* key the mouse holds */
+static long kb_click_until;
+static unsigned char kb_latch[2];           /* SHIFT, SYMBOL SHIFT */
+static short kb_mouse_prev;
+static GRECT kb_work;
+
+static int kb_any_lit(void)
+{
+	short i;
+
+	if (kbw < 0)
+		return 0;
+	for (i = 0; i < KB_KEYS; i++)
+		if (kb_lit[i])
+			return 1;
+	return 0;
+}
+
+static int kb_bit(short x, short y)
+{
+	return (kb_bits[y * KB_WORDS + (x >> 4)] >> (15 - (x & 15))) & 1;
+}
+
+/* the picture at the size for this screen */
+static int kb_make(void)
+{
+	short dx = 1, dy = 1, x, y, i, j, k, wo[57];
+	GRECT b;
+
+	if (kb_pic)
+		return 1;
+	vq_extnd(vh, 1, wo);
+	kb_pen = wo[4] == 1 ? -1 : wo[4] == 2 ? G_RED : G_BLUE;
+	wind_calc(WC_BORDER, KB_KIND, 0, 0, KB_W, KB_H, &b.g_x, &b.g_y, &b.g_w, &b.g_h);
+	if (b.g_w > desk.g_w)
+		dx = dy = 2;
+	if (pix_h >= 2 * pix_w)
+		dy = 2;
+	if (b.g_h - KB_H + KB_H / dy > desk.g_h)
+		dy = 2;
+	kb_w = KB_W / dx;
+	kb_h = KB_H / dy;
+	kb_words = (kb_w + 15) / 16;
+	kb_pic = calloc((long)kb_words * kb_h, 2);
+	if (!kb_pic)
+		return 0;
+	for (y = 0; y < kb_h; y++)
+		for (x = 0; x < kb_w; x++) {
+			short dark = 1;
+
+			for (j = 0; j < dy; j++)
+				for (i = 0; i < dx; i++)
+					dark &= kb_bit(x * dx + i, y * dy + j);
+			if (dark)
+				kb_pic[y * kb_words + (x >> 4)] |= 0x8000 >> (x & 15);
+		}
+	for (k = 0; k < KB_KEYS; k++) {
+		kb_r[k][0] = kb_face[k][0] / dx;
+		kb_r[k][1] = kb_face[k][1] / dy;
+		kb_r[k][2] = kb_face[k][2] / dx;
+		kb_r[k][3] = kb_face[k][3] / dy;
+	}
+	return 1;
+}
+
+/* part r of the screen: the picture, the lit keys */
+static void kb_paint(const GRECT *r)
+{
+	MFDB src, dst;
+	short pxy[8], col[2], k;
+	GRECT c;
+
+	pxy[0] = r->g_x;
+	pxy[1] = r->g_y;
+	pxy[2] = r->g_x + r->g_w - 1;
+	pxy[3] = r->g_y + r->g_h - 1;
+	vs_clip(vh, 1, pxy);
+	vswr_mode(vh, MD_REPLACE);
+	vsf_interior(vh, FIS_SOLID);
+	vsf_color(vh, G_WHITE);
+	vr_recfl(vh, pxy);                  /* where the window is larger */
+
+	memset(&dst, 0, sizeof dst);
+	src.fd_addr = kb_pic;
+	src.fd_w = kb_words * 16;
+	src.fd_h = kb_h;
+	src.fd_wdwidth = kb_words;
+	src.fd_stand = 0;
+	src.fd_nplanes = 1;
+	src.fd_r1 = src.fd_r2 = src.fd_r3 = 0;
+	c.g_x = kb_work.g_x;
+	c.g_y = kb_work.g_y;
+	c.g_w = kb_w;
+	c.g_h = kb_h;
+	if (!intersect(r, &c))
+		return;
+	pxy[0] = c.g_x - kb_work.g_x;
+	pxy[1] = c.g_y - kb_work.g_y;
+	pxy[2] = pxy[0] + c.g_w - 1;
+	pxy[3] = pxy[1] + c.g_h - 1;
+	pxy[4] = c.g_x;
+	pxy[5] = c.g_y;
+	pxy[6] = c.g_x + c.g_w - 1;
+	pxy[7] = c.g_y + c.g_h - 1;
+	col[0] = G_BLACK;
+	col[1] = G_WHITE;
+	vrt_cpyfm(vh, MD_REPLACE, pxy, &src, &dst, col);
+
+	for (k = 0; k < KB_KEYS; k++) {
+		GRECT kr;
+
+		if (!kb_lit[k])
+			continue;
+		kr.g_x = kb_work.g_x + kb_r[k][0];
+		kr.g_y = kb_work.g_y + kb_r[k][1];
+		kr.g_w = kb_r[k][2];
+		kr.g_h = kb_r[k][3];
+		if (!intersect(&c, &kr))
+			continue;
+		pxy[4] = kr.g_x;
+		pxy[5] = kr.g_y;
+		pxy[6] = kr.g_x + kr.g_w - 1;
+		pxy[7] = kr.g_y + kr.g_h - 1;
+		if (kb_pen < 0) {
+			vswr_mode(vh, MD_XOR);
+			vsf_color(vh, G_BLACK);
+			vr_recfl(vh, &pxy[4]);
+			vswr_mode(vh, MD_REPLACE);
+			continue;
+		}
+		pxy[0] = kr.g_x - kb_work.g_x;
+		pxy[1] = kr.g_y - kb_work.g_y;
+		pxy[2] = pxy[0] + kr.g_w - 1;
+		pxy[3] = pxy[1] + kr.g_h - 1;
+		col[0] = kb_pen;
+		col[1] = G_WHITE;
+		vrt_cpyfm(vh, MD_TRANS, pxy, &src, &dst, col);   /* the face only */
+	}
+}
+
+static void kb_redraw(const GRECT *area)
+{
+	GRECT r, a = *area;
+
+	if (kbw < 0 || !intersect(&desk, &a))
+		return;
+	wind_update(BEG_UPDATE);
+	graf_mouse(M_OFF, NULL);
+	wind_get(kbw, WF_FIRSTXYWH, &r.g_x, &r.g_y, &r.g_w, &r.g_h);
+	while (r.g_w > 0 && r.g_h > 0) {
+		if (intersect(&a, &r))
+			kb_paint(&r);
+		wind_get(kbw, WF_NEXTXYWH, &r.g_x, &r.g_y, &r.g_w, &r.g_h);
+	}
+	graf_mouse(M_ON, NULL);
+	wind_update(END_UPDATE);
+}
+
+/* the matrix place of key k: rows 3-1 from the left half of the upper
+   rows of the picture, 4-6 from the right half (bits from the outside
+   in); the bottom row is SHIFT Z X C V B N M SYMBOL-SHIFT SPACE, and
+   SYMBOL SHIFT is in row 0 */
+static void kb_matrix(short k, short *row, short *mask)
+{
+	static const unsigned char bottom[10][2] = {
+		{ 0, 0x01 }, { 0, 0x04 }, { 0, 0x08 }, { 0, 0x10 }, { 7, 0x10 },
+		{ 7, 0x08 }, { 7, 0x04 }, { 7, 0x02 }, { 0, 0x02 }, { 7, 0x01 },
+	};
+	short r = k / 10, c = k % 10;
+
+	if (r == 3) {
+		*row = bottom[c][0];
+		*mask = bottom[c][1];
+		return;
+	}
+	*row = c < 5 ? 3 - r : 4 + r;
+	*mask = 1 << (c < 5 ? c : 9 - c);
+}
+
+static void kb_send(short k, int down)
+{
+	short row, mask;
+
+	kb_matrix(k, &row, &mask);
+	kernel_matrix(row, mask, down);
+}
+
+/* the clicked key up, and SHIFT and SYMBOL SHIFT with it */
+static void kb_release(void)
+{
+	short i;
+
+	if (kb_click >= 0)
+		kb_send(kb_click, 0);
+	kb_click = -1;
+	for (i = 0; i < 2; i++)
+		if (kb_latch[i]) {
+			kb_send(i ? KB_SYMSHIFT : KB_SHIFT, 0);
+			kb_latch[i] = 0;
+		}
+}
+
+static void kb_close(void)
+{
+	short d;
+
+	if (kbw < 0)
+		return;
+	kb_release();
+	wind_get(kbw, WF_CURRXYWH, &kb_x, &kb_y, &d, &d);
+	wind_close(kbw);
+	wind_delete(kbw);
+	kbw = -1;
+	menu_icheck(menu, MI_KEYBOARD, 0);
+}
+
+static void kb_open(void)
+{
+	GRECT b;
+	short k;
+
+	if (kbw >= 0) {
+		wind_set(kbw, WF_TOP, 0, 0, 0, 0);
+		return;
+	}
+	if (!kb_make()) {
+		alert(AL_NOMEM);
+		return;
+	}
+	wind_calc(WC_BORDER, KB_KIND, 0, 0, kb_w, kb_h, &b.g_x, &b.g_y, &b.g_w, &b.g_h);
+	if (kb_x >= 0) {
+		b.g_x = kb_x;
+		b.g_y = kb_y;
+	} else {                            /* centred at the bottom */
+		b.g_x = desk.g_x + (desk.g_w - b.g_w) / 2;
+		b.g_y = desk.g_y + desk.g_h - b.g_h;
+	}
+	clamp_to_desk(&b);
+	kbw = wind_create(KB_KIND, desk.g_x, desk.g_y, desk.g_w, desk.g_h);
+	if (kbw < 0) {
+		alert(AL_NOWINDOW);
+		return;
+	}
+	wind_set_str(kbw, WF_NAME, rs_str(FS_KBTITLE));
+	for (k = 0; k < KB_KEYS; k++)
+		kb_lit[k] = 0, kb_lit_until[k] = 0;
+	kb_mouse_prev = 1;                  /* the menu click is no key */
+	wind_open(kbw, b.g_x, b.g_y, b.g_w, b.g_h);
+	wind_get(kbw, WF_WORKXYWH, &kb_work.g_x, &kb_work.g_y, &kb_work.g_w, &kb_work.g_h);
+	menu_icheck(menu, MI_KEYBOARD, 1);
+}
+
+/* the key under a screen position, -1 = none */
+static short kb_key_at(short mx, short my)
+{
+	short k, x = mx - kb_work.g_x, y = my - kb_work.g_y;
+
+	for (k = 0; k < KB_KEYS; k++)
+		if (x >= kb_r[k][0] && x < kb_r[k][0] + kb_r[k][2] &&
+		    y >= kb_r[k][1] && y < kb_r[k][1] + kb_r[k][3])
+			return k;
+	return -1;
+}
+
+/* a new press of the left button at mx, my */
+static int kb_press(short mx, short my)
+{
+	short k;
+
+	if (kbw < 0 || paused || wind_find(mx, my) != kbw)
+		return 0;
+	k = kb_key_at(mx, my);
+	if (k < 0)
+		return 1;
+	if (k == KB_SHIFT || k == KB_SYMSHIFT) {
+		short i = k == KB_SYMSHIFT;
+
+		kb_latch[i] = !kb_latch[i];
+		kb_send(k, kb_latch[i]);
+	} else if (kb_click < 0) {
+		kb_send(k, 1);
+		kb_click = k;
+		kb_click_until = ticks() + KB_CLICK;
+	}
+	return 1;
+}
+
+/* every frame: the mouse (a press shorter than the time between two
+   evnt_multi is seen here), the end of a click, the lit keys */
+static void kb_poll(void)
+{
+	short mx, my, mb, ks, k;
+	long now;
+
+	if (kbw < 0)
+		return;
+	now = ticks();
+	graf_mkstate(&mx, &my, &mb, &ks);
+	if ((mb & 1) && !(kb_mouse_prev & 1))
+		kb_press(mx, my);
+	kb_mouse_prev = mb;
+	if (kb_click >= 0 && !(mb & 1) && now >= kb_click_until)
+		kb_release();
+	for (k = 0; k < KB_KEYS; k++) {
+		short row, mask, lit;
+
+		kb_matrix(k, &row, &mask);
+		if (!(ace_keyrows[row] & mask))
+			kb_lit_until[k] = now + KB_LIT;
+		lit = kb_lit_until[k] > now;
+		if (lit != kb_lit[k]) {
+			GRECT r;
+
+			kb_lit[k] = lit;
+			r.g_x = kb_work.g_x + kb_r[k][0];
+			r.g_y = kb_work.g_y + kb_r[k][1];
+			r.g_w = kb_r[k][2];
+			r.g_h = kb_r[k][3];
+			kb_redraw(&r);
+		}
+	}
+}
+
+/* the messages for the keyboard window; 1 = it was one */
+static int kb_message(short *msg)
+{
+	GRECT r;
+
+	if (kbw < 0 || msg[3] != kbw)
+		return 0;
+	r.g_x = msg[4];
+	r.g_y = msg[5];
+	r.g_w = msg[6];
+	r.g_h = msg[7];
+	switch (msg[0]) {
+	case WM_REDRAW:
+		kb_redraw(&r);
+		break;
+	case WM_TOPPED:
+		wind_set(kbw, WF_TOP, 0, 0, 0, 0);
+		break;
+	case WM_CLOSED:
+		kb_close();
+		break;
+	case WM_MOVED:
+		clamp_to_desk(&r);
+		wind_set(kbw, WF_CURRXYWH, r.g_x, r.g_y, r.g_w, r.g_h);
+		wind_get(kbw, WF_WORKXYWH, &kb_work.g_x, &kb_work.g_y,
+		         &kb_work.g_w, &kb_work.g_h);
+		break;
+	}
+	return 1;
 }
 
 /* ---------------------------------------------------------------- */
@@ -562,6 +948,7 @@ static void ctrl_key(short ch)
 	case 'p': item = MI_PAUSE; break;
 	case 's': item = MI_SETTINGS; break;
 	case 'w': item = ACT_CLOSEW; break;
+	case 'k': item = MI_KEYBOARD; break;
 	}
 	if (item && !pending)
 		pending = item;
@@ -1124,6 +1511,8 @@ static void inf_load(void)
 			win_place.g_w = c; win_place.g_h = d;
 		} else if (sscanf(line, "SETTINGS %d %d", &a, &b) == 2) {
 			dlg_x = a; dlg_y = b;
+		} else if (sscanf(line, "KEYBOARD %d %d %d", &a, &b, &c) == 3) {
+			kb_x = a; kb_y = b; kb_reopen = c;
 		} else if (sscanf(line, "ABOUT %d %d", &a, &b) == 2) {
 			abt_x = a; abt_y = b;
 		} else if (strncmp(line, "TAPES ", 6) == 0)
@@ -1153,6 +1542,8 @@ static void inf_save(void)
 		fprintf(f, "SETTINGS %d %d\n", dlg_x, dlg_y);
 	if (abt_x >= 0)
 		fprintf(f, "ABOUT %d %d\n", abt_x, abt_y);
+	if (kb_x >= 0)
+		fprintf(f, "KEYBOARD %d %d %d\n", kb_x, kb_y, kb_reopen);
 	if (tape_path[0])
 		fprintf(f, "TAPES %s\n", tape_path);
 	if (snap_path[0])
@@ -1194,6 +1585,12 @@ static int do_action(short item)
 	case MI_SETTINGS:
 		settings();
 		break;
+	case MI_KEYBOARD:
+		if (kbw >= 0)
+			kb_close();
+		else
+			kb_open();
+		break;
 	case ACT_RAMRESET:
 		ace_ram_last = (ram_new << 14) | 0x3FFF;
 		return GF_RESET;
@@ -1204,6 +1601,12 @@ static int do_action(short item)
 		} else if (wdial_top(wd_about)) {
 			about_exit(wd_about, A_OK);
 			close_wdial(wd_about);
+		} else if (kbw >= 0 && on_top() && !wdial_top(wd)) {
+			short top, d;
+
+			wind_get(0, WF_TOP, &top, &d, &d, &d);
+			if (top == kbw)
+				kb_close();
 		}
 		break;
 	}
@@ -1228,7 +1631,7 @@ static void message(short *msg)
 		want_quit = 1;
 		return;
 	}
-	if (message_wdial(msg))
+	if (message_wdial(msg) || kb_message(msg))
 		return;
 	if (msg[3] != win)
 		return;
@@ -1288,9 +1691,10 @@ static void mdial_messages(short *msg)
 static void events(int wait)
 {
 	short msg[8], mx, my, mb, ks, kr, br, ev;
-	short timer = !wait || gk_hooked;
+	short timer = !wait || gk_hooked || kb_any_lit() || kb_click >= 0;
+	short button = wait || kbw >= 0;
 
-	ev = evnt_multi(MU_MESAG | MU_KEYBD | (wait ? MU_BUTTON : 0) | (timer ? MU_TIMER : 0),
+	ev = evnt_multi(MU_MESAG | MU_KEYBD | (button ? MU_BUTTON : 0) | (timer ? MU_TIMER : 0),
 	                0x102, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	                msg, wait ? 20 : 0, &mx, &my, &mb, &ks, &kr, &br);
 	if (ev & MU_MESAG)
@@ -1311,8 +1715,12 @@ static void events(int wait)
 		} else if (!key_wdial(kr, ks))
 			aes_key(ks, kr);
 	}
-	if ((ev & MU_BUTTON) && (mb & 1))
-		click_wdial(br, mx, my, ks, mb);
+	if ((ev & MU_BUTTON) && (mb & 1)) {
+		if (kb_press(mx, my))
+			kb_mouse_prev = 1;          /* not again from kb_poll() */
+		else if (wait)
+			click_wdial(br, mx, my, ks, mb);
+	}
 }
 
 #ifdef STATS
@@ -1360,6 +1768,7 @@ int gem_frame(void)
 #endif
 	ring_keys();
 	aes_keys_expire();
+	kb_poll();
 	if (title_until && ticks() >= title_until) {
 		title_until = 0;
 		set_title();
@@ -1403,6 +1812,7 @@ int gem_frame(void)
 		while (!want_quit && !pending && (paused || !on_top())) {
 			keys_manage(0);
 			events(1);
+			kb_poll();
 			waited = 1;
 		}
 		if (waited)
@@ -1588,6 +1998,8 @@ int main(void)
 		quit_gem();
 		return 1;
 	}
+	if (kb_reopen)
+		kb_open();
 	Supexec(gk_timer_on);
 	key_quiet = ticks();
 
@@ -1619,6 +2031,8 @@ int main(void)
 		abt_x = wd_about->work.g_x;
 		abt_y = wd_about->work.g_y;
 	}
+	kb_reopen = kbw >= 0;
+	kb_close();
 	close_window();
 	inf_save();
 	if (wd)

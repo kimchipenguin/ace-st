@@ -23,6 +23,7 @@ extern char ace_tapename[];                 /* 169 bytes */
 extern void *ace_snap_buf;
 extern unsigned char ace_joy_map[5];        /* ST scancodes: up down left right fire */
 extern const char ace_keyname[128][4];      /* Ace key names by ST scancode */
+extern volatile unsigned char ace_keyrows[8]; /* what the Ace reads, bit clear = down */
 
 void kernel_init(void);         /* once, with the ROM in ace_mem */
 int  kernel_run(int snap);      /* until gem_frame() says GF_QUIT: 0;
@@ -32,6 +33,7 @@ void kernel_key(int scancode);  /* bit 7 = break */
 void kernel_joy(int bits);      /* joystick 1, IKBD bits */
 int  ace_snap_read(const char *name);   /* 0, -1 read, -2 not one, -3 memory */
 void kernel_tape_close(void);
+void kernel_matrix(int row, int mask, int down);  /* one Ace key */
 
 /* GETF sites, offsets from kernel_start: move.w sr,dn -> move.w ccr,dn */
 extern unsigned short kernel_start[];

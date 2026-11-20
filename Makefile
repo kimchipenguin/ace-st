@@ -90,7 +90,11 @@ ACEGEM.RSC $(GB)/acegem_rsc.h: tools/mkgemrsc.py
 	@mkdir -p $(GB)
 	python3 tools/mkgemrsc.py ACEGEM.RSC $(GB)/acegem_rsc.h
 
-$(GB)/%.o: gem/%.c gem/kernel.h gem/aesfix.h $(GB)/acegem_rsc.h
+$(GB)/kbpic.h: assets/keyboardJupiterAce.bmp tools/mkkbpic.py
+	@mkdir -p $(GB)
+	python3 tools/mkkbpic.py assets/keyboardJupiterAce.bmp $@
+
+$(GB)/%.o: gem/%.c gem/kernel.h gem/aesfix.h $(GB)/acegem_rsc.h $(GB)/kbpic.h
 	@mkdir -p $(GB)
 	$(CROSS)gcc $(GCFLAGS) -c $< -o $@
 

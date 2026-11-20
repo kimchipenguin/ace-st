@@ -102,7 +102,8 @@ def menu_tree():
                      ('MI_QUIT', '  Quit              ^Q ')]),
             drop(2, [('MI_RESET', '  Reset   ^R '),
                      ('MI_PAUSE', '  Pause   ^P ')]),
-            drop(3, [('MI_SETTINGS', '  Settings...  ^S ')]),
+            drop(3, [('MI_SETTINGS', '  Settings...  ^S '),
+                     ('MI_KEYBOARD', '  Keyboard     ^K ')]),
         ]),
     ])
 
@@ -187,6 +188,7 @@ FREE_STRINGS = [
     ('AL_NOMEM', '[1][Not enough memory.][ OK ]'),
     ('AL_SHOT', '[3][The screenshot could not|be saved.][Cancel]'),
     ('FS_SHOTSAVED', ' ACEGEM - saved '),
+    ('FS_KBTITLE', ' Jupiter Ace keyboard '),
     ('AL_COLDFIRE', '[3][ACEGEM needs a 68000-family|CPU. It does not run on|ColdFire.][Cancel]'),
 ]
 
