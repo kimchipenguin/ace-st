@@ -7,10 +7,12 @@
 #   make rsc        ACE.RSC + src/rsc.i from tools/mkrsc.py (overwrites edits)
 #   make daleks     examples/DALEKS.TAP + DALEKS.ACE (Forth game, typed in by tools/acetype)
 #   make gem        ACEGEM.APP, the GEM version (gem/, m68k-atari-mint-gcc)
+#   make dist       ACE-ST-$(VERSION).zip: both programs, manual, Daleks
 VASM   ?= $(HOME)/Develop/vasm-src/vasm/vasmm68k_mot
 TRACEN ?= 150000
 TRACESKIP ?= 0
 HATARI ?= hatari
+VERSION = 1.0
 
 GEN = src/kernel/z80ops.s src/kernel/tables.s src/kbpic.bin src/logo.bin src/kbmed.bin src/logomed.bin
 SRCS = $(wildcard src/*.s src/kernel/*.s) src/rsc.i
@@ -94,19 +96,33 @@ $(GB)/kbpic.h: assets/keyboardJupiterAce.bmp tools/mkkbpic.py
 	@mkdir -p $(GB)
 	python3 tools/mkkbpic.py assets/keyboardJupiterAce.bmp $@
 
-$(GB)/%.o: gem/%.c gem/kernel.h gem/aesfix.h $(GB)/acegem_rsc.h $(GB)/kbpic.h
+$(GB)/%.o: gem/%.c gem/kernel.h gem/aesfix.h gem/speed.h $(GB)/acegem_rsc.h $(GB)/kbpic.h
 	@mkdir -p $(GB)
 	$(CROSS)gcc $(GCFLAGS) -c $< -o $@
 
-ACEGEM.APP: $(GB)/glue.o $(GB)/acegem.o $(GB)/aesfix.o ACEGEM.RSC
-	$(CROSS)gcc -m68000 -Wl,--wrap=mt_wind_create_grect -o $@ $(GB)/acegem.o $(GB)/aesfix.o $(GB)/glue.o -lcflib -lgem -lz
+ACEGEM.APP: $(GB)/glue.o $(GB)/acegem.o $(GB)/aesfix.o $(GB)/speed.o ACEGEM.RSC
+	$(CROSS)gcc -m68000 -Wl,--wrap=mt_wind_create_grect -o $@ $(GB)/acegem.o $(GB)/aesfix.o $(GB)/speed.o $(GB)/glue.o -lcflib -lgem -lz
 	$(CROSS)strip $@
 	$(CROSS)stack -s --size=32768 $@ >/dev/null
 	$(CROSS)flags -S $@ >/dev/null
+
+# the release: ACE_ST\ with both programs; text files with CR LF
+CRLF = perl -pe 's/\r?\n/\r\n/'
+dist: ACE.PRG ACEGEM.APP ACEGEM.RSC
+	rm -rf dist ACE-ST-$(VERSION).zip
+	mkdir -p dist/ACE_ST/EXAMPLES
+	cp ACE.PRG ACE.ROM ACE.RSC ACEGEM.APP ACEGEM.RSC dist/ACE_ST/
+	$(CRLF) docs/README.TXT > dist/ACE_ST/README.TXT
+	$(CRLF) LICENSE > dist/ACE_ST/LICENSE.TXT
+	cp examples/DALEKS.TAP examples/DALEKS.ACE dist/ACE_ST/EXAMPLES/
+	$(CRLF) examples/DALEKS.TXT > dist/ACE_ST/EXAMPLES/DALEKS.TXT
+	$(CRLF) examples/daleks.fs > dist/ACE_ST/EXAMPLES/DALEKS.FS
+	$(CRLF) examples/daleks-save.txt > dist/ACE_ST/EXAMPLES/DALSAVE.TXT
+	cd dist && zip -qrX ../ACE-ST-$(VERSION).zip ACE_ST
 
 clean:
 	rm -f ACE.PRG ACETRACE.PRG ACECOUNT.PRG ACEGEM.APP test/oracle/oracle tools/acetype
 	rm -rf $(GB)
 
-.PHONY: all trace count oracle rsc daleks run gem clean FORCE
+.PHONY: all trace count oracle rsc daleks run gem dist clean FORCE
 FORCE:

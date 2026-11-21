@@ -22,13 +22,15 @@ What it does do
 - joystick support like ZX81 emulator
 - RAM configuration: 3K, 19K, 35K, 51K
 - show the Jupiter ACE keyboard with the HELP key
+- ACEGEM.APP: the same emulator as a GEM program, in a window or full
+  screen, in any resolution, also under MagiC and MiNT
 
 Limitations
 -----------
 - not yet 100% on the ST
-- no support for resolutions other than ST medium and high
+- ACE.PRG only runs in ST medium and high (ACEGEM.APP runs everywhere)
 - no sound board emulation
-- no speed throttle for fast Ataris
+- ACE.PRG has no speed limit for fast Ataris (ACEGEM.APP has one)
 
 Example
 -------
@@ -46,6 +48,27 @@ Ctrl+O      Open a tape
 Ctrl+Q      Quit program
 Alt+T       Save screenshot (32k format)
 
+ACEGEM.APP - the GEM version
+---------------------------
+ACEGEM.APP needs ACEGEM.RSC and ACE.ROM in its folder. It runs on any
+68000-family Atari (ST to Falcon, TT, ARAnyM) in any resolution, also
+under MagiC and MiNT. The Ace runs while its window is on top.
+
+Ctrl+O      Open a tape
+Ctrl+L      Load a snapshot (.ACE)
+Ctrl+T      Save a screenshot (PNG, in the folder SCNSHT)
+Ctrl+Q      Quit program
+Ctrl+R      Reset the Ace
+Ctrl+P      Pause
+Ctrl+F      Full screen (Ctrl+F or UNDO goes back)
+Ctrl+S      Settings: RAM size, joystick keys, speed limit
+Ctrl+K      The Jupiter ACE keyboard in a window (click the keys)
+Ctrl+W      Close the window on top
+
+On fast machines the speed limit keeps the Ace at the speed of a real
+one; it is on by default with a 68020 or faster CPU. You can drop a tape
+or snapshot on the window or on the program.
+
 Links & Resources
 -----------------
 https://www.mia-jaap.de/software         - My website
@@ -57,6 +80,10 @@ https://lawrencewoodman.github.io/xAce/  - Important resource for this emulator
 
 Version history
 ---------------
+1.0     - ACEGEM.APP, the GEM version: window or full screen, any
+          resolution, MagiC and MiNT, keyboard window, speed limit,
+          iconify, drag & drop, sound also on the Falcon and ARAnyM
+
 0.8     - settings dialog
         - save screenshot
         - load .ACE snapshots

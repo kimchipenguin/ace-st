@@ -1,0 +1,10 @@
+wait 18
+type 100 1000 beep_
+wait 3
+type 50 500 beep_
+wait 3
+shot
+down 0x1d
+key 0x10
+up 0x1d
+wait 3

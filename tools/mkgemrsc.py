@@ -100,8 +100,9 @@ def menu_tree():
                      ('MI_SHOT', '  Save screenshot   ^T '),
                      (None, sep[:23]),
                      ('MI_QUIT', '  Quit              ^Q ')]),
-            drop(2, [('MI_RESET', '  Reset   ^R '),
-                     ('MI_PAUSE', '  Pause   ^P ')]),
+            drop(2, [('MI_RESET', '  Reset        ^R '),
+                     ('MI_PAUSE', '  Pause        ^P '),
+                     ('MI_FULL', '  Full screen  ^F ')]),
             drop(3, [('MI_SETTINGS', '  Settings...  ^S '),
                      ('MI_KEYBOARD', '  Keyboard     ^K ')]),
         ]),
@@ -112,6 +113,7 @@ def menu_tree():
 
 EXITBUT = SELECTABLE | EXIT | FL3DACT
 POPBOX = TOUCHEXIT | FL3DBAK
+CHECK = SELECTABLE | TOUCHEXIT | FL3DBAK
 KEYSTR = TOUCHEXIT                      # label that cycles its popup
 
 # the popup box shows the chosen text and the program finds the entry by
@@ -122,6 +124,7 @@ RW = len(RAM_TEXTS[0])
 
 
 def key_field(name, label, lx, x, y):
+    # (label at lx, field at x; for a field before its label give lx > x)
     """a joystick key: its label and a 3-character field (the Ace key's
     name, as in ACE.INF) with a black border two pixels outside"""
     return [
@@ -136,10 +139,10 @@ def settings_tree():
     # group frames come one below the other, the button in a row below.
     keys = (key_field('D_KUP', 'Up', 10, 13, 1) +
             key_field('D_KLEFT', 'Left', 3, 8, 2) +
-            key_field('D_KRIGHT', 'Right', 18, 24, 2) +
+            key_field('D_KRIGHT', 'Right', 22, 18, 2) +
             key_field('D_KDOWN', 'Down', 8, 13, 3) +
             key_field('D_KFIRE', 'Fire', 19, 24, 3))
-    return obj('SETDIAL', G_BOX, FL3DBAK, NORMAL, 0x00001100, 0, 0, 32, 12, [
+    return obj('SETDIAL', G_BOX, FL3DBAK, NORMAL, 0x00001100, 0, 0, 32, 15, [
         obj('D_TITLE', G_STRING, FL3DBAK, MX_TITLE, 'Settings', 1, 0, 30, (1, 2)),
         obj('D_FMEM', G_BUTTON, NONE, MX_FRAME, ' Memory ', 1, 1, 30, 2, [
             obj('D_RAMLBL', G_STRING, KEYSTR, MX_SC(0), 'RAM', 1, 1, 3, 1),
@@ -147,16 +150,22 @@ def settings_tree():
             obj(None, G_STRING, NONE, NORMAL, '(resets the Ace)', 12, 1, 16, 1),
         ]),
         obj('D_FJOY', G_BUTTON, NONE, MX_FRAME, ' Joystick keys ', 1, 4, 30, 4, keys),
-        obj('D_CLOSE', G_BUTTON, EXITBUT | FLAG11 | DEFAULT, MX_SC(0), 'Close', 21, 10, 9, 1),
+        obj('D_FSPEED', G_BUTTON, NONE, MX_FRAME, ' Speed ', 1, 9, 30, 2, [
+            obj('D_LIMIT', G_BUTTON, CHECK, MX_CHECK(0), 'Limit to a real Ace', 1, 1, 22, 1),
+        ]),
+        obj('D_CLOSE', G_BUTTON, EXITBUT | FLAG11 | DEFAULT, MX_SC(0), 'Close', 21, 13, 9, 1),
     ])
 
 
 def about_tree():
-    lines = ['Jupiter Ace emulator', 'for the Atari', 'Version 0.9', 'GPL v2 or later']
+    lines = ['Jupiter Ace emulator', 'for the Atari', 'Version 1.0', 'GPL v2 or later']
+    # an invisible group (G_IBOX with the frame mark): the program lays out
+    # the rows of groups only
     return obj('ABOUT', G_BOX, FL3DBAK, NORMAL, 0x00001100, 0, 0, 30, 10, [
         obj('A_TITLE', G_STRING, FL3DBAK, MX_TITLE, 'About ACEGEM', 1, 0, 28, (1, 2)),
-        obj('A_FRAME', G_BUTTON, NONE, MX_FRAME, ' ACEGEM ', 1, 1, 28, 5,
-            [string('A_LINE%d' % (i + 1), t, 1, i + 1, len(t)) for i, t in enumerate(lines)]),
+        obj('A_FRAME', G_IBOX, NONE, MX_FRAME, 0, 1, 1, 28, 5,
+            [string('A_LINE%d' % (i + 1), t, (28 - len(t)) // 2, i + 1, len(t))
+             for i, t in enumerate(lines)]),
         obj('A_OK', G_BUTTON, EXITBUT | DEFAULT | FLAG11, MX_SC(0), 'OK', 10, 8, 10, 1),
     ])
 

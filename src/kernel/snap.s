@@ -238,7 +238,11 @@ snap_start:
         lsr.w   #8,d7
         jsr     z80_to_f
         movea.w ram_last,a3
+        ifd     GEMAPP
+        movea.l _ace_slots,a4               ; slot_mid or the speed stubs
+        else
         lea     slot_base+$8000,a4          ; slot_mid
+        endif
         NEXT
 
 ; copy 1K from (a0) to (a1)+

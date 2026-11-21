@@ -12,7 +12,7 @@ language.
 
 ![Ace Invaders running in ACE ST (Hatari, ST high)](docs/ace-invaders.png)
 
-## Status (2026-11-11)
+## Status (2026-11-21, version 1.0)
 
 Assembles with vasm and runs in Hatari (ST high and ST medium; TOS 1.04, 2.06, EmuTOS). Boots to the Ace prompt, Forth
 works (VLIST, arithmetic), and Ace Invaders loads from its .TAP (renamed TAPE.ACE: xAce's block
@@ -204,6 +204,18 @@ file` (.ace snapshot), `#ram n`, `#noerr`. It is also handy for trying out Forth
 - Keyboard window: `gemkbd.txt` (`EXTRA=ACEGEM.RSC`): ^K, typing, Shift+A held (lit keys), ^W,
   ^K, ^Q, then `KEYBOARD` in `ACEGEM.INF`. Checked in TOS 1.04 mono and TOS 2.06 STE medium and
   low (`--tos-res`). Clicking keys needs the mouse: tested by hand.
+- Full screen: `gemfull.txt` (`EXTRA=ACEGEM.RSC`): typing, ^F, typing, Undo, ^F, ^S (leaves full
+  screen for the dialog), ^W, ^Q. Checked: TOS 1.04 mono and TOS 2.06 STE medium (direct), STE
+  low and EmuTOS 1024x768 16 colours (VDI; needs `--memsize 4`, at scale 4 slow on 8 MHz).
+- Sound: `gembeep.txt` (`100 1000 BEEP`, `50 500 BEEP`), recorded without a sound device:
+  `SDL_AUDIODRIVER=dummy ... test/run.sh gembeep test/scripts/gembeep.txt --sound 44100
+  --avirecord --avi-file x.avi`, then measure the AVI's audio track (zero crossings: 1250 and
+  2500 Hz, 1 s and 0.5 s). Checked: ST mono (YM) and Falcon TOS 4.04 (`MACHINE=falcon
+  MONITOR=vga --memsize 4`, DMA).
+- Speed limit: `dbench.txt` in ACEGEM on a TT (`MACHINE=tt MONITOR=vga
+  TOS=.../etos512de.img --memsize 4`, `EXTRA=ACEGEM.RSC`), once as is and once with an
+  ACEGEM.INF holding `SPEED 0`: 2146 and 513 frames (real Ace 2185). Iconify, drag & drop,
+  VA_START and DHST need a multitasking AES and the mouse: tested by hand.
 - A STATS build (`-DSTATS`) shows frames, event ticks and drawing ticks per second in the window
   title. Hatari's `--trace cpu_exception` names the PC of a bomb (it found a wrong XBIOS number).
 
@@ -227,7 +239,7 @@ high (640x400 mono) or ST medium (640x200). `ACE.RSC` (the settings
 dialog) belongs next to ACE.PRG too; `make rsc` rebuilds it and `src/rsc.i` from
 `tools/mkrsc.py` (this overwrites changes made with a resource editor).
 
-### ACEGEM.APP (GEM version, in progress)
+### ACEGEM.APP (GEM version)
 
 ```
 make gem                             # -> ACEGEM.APP and ACEGEM.RSC (needs m68k-atari-mint-gcc, CF-Lib, zlib)
@@ -241,13 +253,28 @@ ACIA (MagiC Mac/PC) AES key events stand in. 68000 to 68060; on ColdFire it says
 
 Menus and shortcuts: File > Open tape... **^O** (the tape for the next `LOAD`/`SAVE`), Load
 snapshot... **^L** (.ace), Save screenshot **^T** (`SCNSHT\SHOTnnnn.PNG`, 256x192, 1 bit),
-Quit **^Q**; Emulation > Reset **^R**, Pause **^P**; Options > Settings... **^S** (RAM size,
+Quit **^Q**; Emulation > Reset **^R**, Pause **^P**, Full screen **^F**; Options > Settings... **^S** (RAM size,
 which resets the Ace, and the joystick keys, by their ACE.INF names), Keyboard **^K**; **^W**
 closes a dialog or the keyboard window.
 A menu entry or shortcut runs once all keys are up and the hook is out, so alerts, dialogs and
 file selectors get a keyboard TOS knows about. `ACEGEM.INF` (next to the program, written at
 Quit) keeps `RAM` and `JOYSTICK` as in ACE.INF, plus `WINDOW`, `SETTINGS`, `ABOUT`, `TAPES` and
-`SNAPSHOTS` (the file selectors' folders) and `KEYBOARD x y open`. No sound or full screen yet.
+`SNAPSHOTS` (the file selectors' folders), `KEYBOARD x y open` and `SPEED` (only once it was
+changed in the Settings).
+
+Sound: BEEP's tone goes to `gem_sound()` (`host_snd_on/off` in `gem/glue.s`). With the Falcon
+sound XBIOS (`_SND` CODEC bit: Falcon, CT60, ARAnyM, which has no YM sound) a square wave of
+whole periods loops in a 16-bit stereo DMA buffer at 24585 Hz, as in the Pong game; otherwise
+the YM's channel A plays it through XBIOS `Giaccess()` (user mode). As in ACE.PRG the Ace
+waits while the tone plays, and so does the window (no redraws, no menus).
+
+Full screen holds the screen and the mouse (`BEG_UPDATE`, `BEG_MCTRL`), mouse pointer off. On the
+ST shifter (`_VDO` ST/STE/TT) in ST high or medium, the kernel's `REFRESH` (`gk_refresh` in
+`gem/glue.s`) draws the changed cells straight into screen memory as ACE.PRG does (in medium with
+ACE.PRG's colours 0-3, put back afterwards); elsewhere the picture goes through the VDI at the
+largest scale that fits the screen. **^F** or **Undo** (passed on by the IKBD hook) goes back;
+menu entries that open a dialog, alert or file selector leave full screen first (Reset, Pause,
+screenshot and Quit don't). `FMD_FINISH` and `menu_bar()` draw the desktop again.
 
 The keyboard window (as in sz81's Atari build) shows EightyOne's picture; the Ace keeps running
 and gets the keys while it is on top. Every key the Ace sees down (typed, clicked, joystick) is
@@ -255,11 +282,35 @@ lit for a second after it went up: blue on the key face (red with 4 colours), in
 A click holds a key for at least 80 ms; SHIFT and SYMBOL SHIFT stay down until the next key.
 The picture is halved in height in ST medium, in both directions when it is too wide (ST low).
 
+Speed limit (`gem/speed.c`, Settings > Speed, `SPEED 0|1` in ACEGEM.INF; on by default with a
+68020 or later): a real Ace runs 65000 T-states per 50 Hz frame. With the limit on, register a4
+points to a 64K block of stubs instead of the handler slots, and the prefix tables (CB, DD, ED,
+FD, DDCB) and `natab` point to stubs too. Each stub takes the instruction's T-states off
+`ace_budget` and, once it is below zero, waits in `gem_throttle()` for the next tick (Syield()
+under MiNT and MagiC); `gem_frame()` adds 65000 per frame, at most up to 65000. The kernel
+itself is unchanged, and with the limit off nothing of this runs (`host_service` reloads a4
+from `ace_slots` every frame, so the switch takes effect at once). Weights: Z80 T-states (a
+conditional jump or call counts between taken and not taken); for the steps ACE-ST runs as one,
+what xAce's core counts for the ROM code they replace (`NATSTAT=1 test/oracle/oracle ...` prints
+them per native word): Forth NEXT 361, data stack push/pop 87, keyboard scan 640, LDIR 21 per
+byte, the native words 89 to 1480 (+361 when they go on into `forth_next` themselves). Daleks
+benchmark on a Hatari TT (68030, 32 MHz): 2146 frames with the limit (real Ace 2185), 513
+without.
+
+Iconify (where the AES has it): the window shows "ACE" with the logo's lines, and the Ace waits.
+A tape (.TAP, any name) or snapshot (.ACE) also comes in on the command line, by `VA_START`, by
+drag & drop (`AP_DRAGDROP`, ARGS) or dropped on the window (AV protocol, `VA_DRAGACCWIND`): a
+snapshot starts, anything else becomes the tape for the next `LOAD`. Opened tapes and
+snapshots go to the Document History server (`DHST` cookie), as in the CHIP-8 emulator.
+
 ## Layout
 
-The kernel in `src/kernel/` is shared by ACE.PRG and the coming GEM version (ACEGEM.APP);
+The kernel in `src/kernel/` is shared by ACE.PRG and the GEM version (ACEGEM.APP);
 `src/kernel/host.i` lists what a front end must provide. The rest of `src/` is the ACE.PRG
-front end.
+front end, `gem/` the ACEGEM one. ACE.PRG is one vasm run (`-Ftos`, `src/main.s` includes
+the kernel); for ACEGEM, `gem/glue.s` includes the kernel with `-DGEMAPP` and is assembled
+twice (`-Faout`, the first listing gives the `GETF` sites), then linked with the C front end
+by m68k-atari-mint-gcc. Under `GEMAPP` the kernel differs only where it loads a4.
 
 | File | Purpose |
 |---|---|
@@ -286,6 +337,7 @@ front end.
 | `src/main.s` | Startup, logo screen, IKBD and Timer C handlers, sound hooks (YM), Help keyboard picture, data |
 | `gem/glue.s` | ACEGEM: the kernel plus C wrappers, Timer C and IKBD hooks (XBRA "AceG") |
 | `gem/acegem.c`, `gem/kernel.h` | ACEGEM front end: window, VDI drawing, keys, frame loop |
+| `gem/speed.c` | ACEGEM: speed limit, T-state stubs in front of the kernel's handlers |
 | `gem/aesfix.c` | ACEGEM: CF-Lib USERDEFs on an own stack, no BACKDROP gadget on old AES (from the CHIP-8 emulator) |
 | `tools/mkkbpic.py` | ACEGEM: `assets/keyboardJupiterAce.bmp` to `gem/build/kbpic.h` (1-bit words + the 40 key faces it finds) |
 | `tools/mkgemrsc.py` | Writes `ACEGEM.RSC` and `gem/build/acegem_rsc.h` (menu, Settings, About, RAM popup, texts) |
@@ -304,7 +356,7 @@ front end.
 
 ## Known gaps
 
-- No throttling (not needed until the core reaches 100% somewhere).
+- ACE.PRG has no speed limit (ACEGEM has one): on a TT or accelerated ST it runs too fast.
 - H and N flags are not tracked, so `DAA` stops with an "unimplemented opcode" message.
   Also missing: `SLL`, `RLD`/`RRD`, block I/O, undocumented IXH/IXL, IM 2, R register.
 - Sound only through BEEP: direct speaker toggling on port 0xFE (not used by the ROM outside

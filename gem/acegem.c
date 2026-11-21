@@ -26,6 +26,7 @@
 #include <cflib.h>
 #include <mint/osbind.h>
 #include <mint/cookie.h>
+#include <mint/falcon.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -34,6 +35,7 @@
 #include "aesfix.h"
 #include "acegem_rsc.h"
 #include "kbpic.h"
+#include "speed.h"
 
 #define RSC_FILE "ACEGEM.RSC"
 #define INF_FILE "ACEGEM.INF"
@@ -46,17 +48,41 @@
 #define SC_CTRL 0x1D
 #define SC_LSH  0x2A
 #define SC_ALT  0x38
+#define SC_UNDO 0x61
 
 /* actions that are no menu entry */
 #define ACT_RAMRESET    1000        /* new RAM size: reset */
 #define ACT_CLOSEW      1001        /* Control+W: close the dialog on top */
+#define ACT_OPEN        1002        /* a file from VA_START, drag & drop */
+
+/* AV protocol, Document History */
+#define MX_GLOBAL_AV        0x20    /* Mxalloc(): readable by all */
+#define AV_PROTOKOLL        0x4700
+#define VA_PROTOSTATUS      0x4701
+#define VA_START            0x4711
+#define AV_ACCWINDOPEN      0x4724
+#define VA_DRAGACCWIND      0x4725
+#define AV_ACCWINDCLOSED    0x4726
+#define AV_EXIT             0x4736
+#define AV_STARTED          0x4738
+#define DHST_ADD            0xDADD
+#define DHST_ACK            0xDADE
 
 static short vh, win = -1;
 static short kbw = -1;                      /* the keyboard window */
+#define FULL_ST  1                          /* full screen: direct */
+#define FULL_VDI 2                          /* full screen: VDI */
+static short full;                          /* 0 = in the window */
+static GRECT scr;                           /* the whole screen */
+static short scr_medium;                    /* FULL_ST: ST medium */
+static void *scr_base;                      /* FULL_ST: Physbase */
 static short win_kind = NAME | CLOSER | MOVER | FULLER | SIZER;
 static short pix_w = 1, pix_h = 1;          /* pixel shape, work_out[3/4] */
 static GRECT desk, wwork, wfull_old, win_place;
 static short fulled;
+static short iconified;                     /* the Ace waits meanwhile */
+static GRECT iwork, icon_old;               /* icon work area, place before */
+static char open_req[300];                  /* for ACT_OPEN */
 
 /* the picture: a one-plane bitmap, ACE_W * sx by ACE_H * sy */
 static short sx, sy;                        /* 0 = does not fit */
@@ -85,6 +111,7 @@ static WDIALOG *wd, *wd_about;
 static short dlg_x = -1, dlg_y = -1, abt_x = -1, abt_y = -1;
 static char *key_text[5];                   /* the joystick key fields */
 static short ram_new;                       /* RAM size for ACT_RAMRESET */
+static short speed_limit = -1;              /* -1: on with a 68020 or later */
 
 static char inf_path[300];
 static char tape_path[300], snap_path[300]; /* file selector folders */
@@ -305,6 +332,48 @@ static int intersect(const GRECT *a, GRECT *b)
 	return b->g_w > 0 && b->g_h > 0;
 }
 
+/* the iconified window: "ACE" with the lines of the Jupiter Ace logo,
+   white on black, as large as fits */
+static const char *const icon_rows[7] = {
+	" ###   ###  #####        ",
+	"#   # #   # #            ",
+	"#   # #     #     #######",
+	"##### #     ####         ",
+	"#   # #     #     #######",
+	"#   # #   # #            ",
+	"#   #  ###  #####  ######",
+};
+#define ICON_W 25
+#define ICON_H 7
+
+static void paint_icon(const short *pxy)
+{
+	short px, py, x, y, r[4];
+
+	vsf_interior(vh, FIS_SOLID);
+	vswr_mode(vh, MD_REPLACE);
+	vsf_color(vh, G_BLACK);
+	vr_recfl(vh, (short *)pxy);
+	px = (iwork.g_w - 4) / ICON_W;
+	if (px < 1)
+		px = 1;
+	py = (short)(((long)px * pix_w + pix_h / 2) / pix_h);
+	if (py < 1)
+		py = 1;
+	if (ICON_H * py > iwork.g_h - 4 && (py = (iwork.g_h - 4) / ICON_H) < 1)
+		py = 1;
+	vsf_color(vh, G_WHITE);
+	for (y = 0; y < ICON_H; y++)
+		for (x = 0; x < ICON_W; x++)
+			if (icon_rows[y][x] == '#') {
+				r[0] = iwork.g_x + (iwork.g_w - ICON_W * px) / 2 + x * px;
+				r[1] = iwork.g_y + (iwork.g_h - ICON_H * py) / 2 + y * py;
+				r[2] = r[0] + px - 1;
+				r[3] = r[1] + py - 1;
+				vr_recfl(vh, r);
+			}
+}
+
 /* screen area r (inside the work area): picture, black around it */
 static void paint(const GRECT *r)
 {
@@ -317,6 +386,10 @@ static void paint(const GRECT *r)
 	pxy[2] = r->g_x + r->g_w - 1;
 	pxy[3] = r->g_y + r->g_h - 1;
 	vs_clip(vh, 1, pxy);
+	if (iconified) {
+		paint_icon(pxy);
+		return;
+	}
 
 	p.g_x = wwork.g_x + ox;
 	p.g_y = wwork.g_y + oy;
@@ -362,8 +435,13 @@ static void redraw(const GRECT *area)
 	GRECT r, a = *area;
 	short mx, my, mb, ks, mouse_off = 0;
 
-	if (win < 0)
+	if (win < 0 || full == FULL_ST)
 		return;
+	if (full) {                         /* screen and mouse are ours */
+		if (intersect(&scr, &a))
+			paint(&a);
+		return;
+	}
 	if (!intersect(&desk, &a))
 		return;
 	wind_update(BEG_UPDATE);
@@ -389,6 +467,12 @@ static void show_changes(void)
 	short top, bot;
 	GRECT a;
 
+	if (full == FULL_ST) {
+		gk_refresh(scr_base, scr_medium);
+		return;
+	}
+	if (iconified)
+		return;
 	if (!render(&top, &bot))
 		return;
 	a.g_x = wwork.g_x + ox;
@@ -407,7 +491,7 @@ static void set_title(void)
 #ifndef STATS
 	char *t = paused ? rs_str(FS_PAUSED) : title_until ? title_buf : rs_str(FS_WINTITLE);
 
-	if (win >= 0)
+	if (win >= 0 && !full)
 		wind_set_str(win, WF_NAME, t);
 #endif
 }
@@ -480,7 +564,9 @@ static void close_window(void)
 {
 	if (win < 0)
 		return;
-	if (fulled)
+	if (iconified)
+		win_place = fulled ? wfull_old : icon_old;
+	else if (fulled)
 		win_place = wfull_old;
 	else
 		wind_get(win, WF_CURRXYWH, &win_place.g_x, &win_place.g_y,
@@ -494,8 +580,10 @@ static int on_top(void)
 {
 	short top, d;
 
-	if (win < 0)
+	if (win < 0 || iconified)
 		return 0;
+	if (full)
+		return 1;
 	wind_get(0, WF_TOP, &top, &d, &d, &d);
 	return top == win || (kbw >= 0 && top == kbw);   /* both get the keys */
 }
@@ -674,7 +762,7 @@ static void kb_redraw(const GRECT *area)
 {
 	GRECT r, a = *area;
 
-	if (kbw < 0 || !intersect(&desk, &a))
+	if (kbw < 0 || full || !intersect(&desk, &a))
 		return;
 	wind_update(BEG_UPDATE);
 	graf_mouse(M_OFF, NULL);
@@ -799,7 +887,7 @@ static int kb_press(short mx, short my)
 {
 	short k;
 
-	if (kbw < 0 || paused || wind_find(mx, my) != kbw)
+	if (kbw < 0 || paused || full || wind_find(mx, my) != kbw)
 		return 0;
 	k = kb_key_at(mx, my);
 	if (k < 0)
@@ -824,7 +912,7 @@ static void kb_poll(void)
 	short mx, my, mb, ks, k;
 	long now;
 
-	if (kbw < 0)
+	if (kbw < 0 || full)
 		return;
 	now = ticks();
 	graf_mkstate(&mx, &my, &mb, &ks);
@@ -882,6 +970,225 @@ static int kb_message(short *msg)
 		break;
 	}
 	return 1;
+}
+
+/* ---------------------------------------------------------------- */
+/* full screen                                                       */
+/* ---------------------------------------------------------------- */
+
+/* The whole screen for the Ace, with the screen and the mouse held
+   (BEG_UPDATE, BEG_MCTRL), the mouse pointer off.  On the ST shifter in
+   ST high or medium (FULL_ST) the kernel draws the changed cells straight
+   into screen memory, as ACE.PRG does (black screen; in medium colours 0-3
+   are set as ACE.PRG sets them and put back afterwards); everywhere else
+   (FULL_VDI) the picture is copied through the VDI at the largest scale
+   that fits the screen.  ^F or Undo goes back to the window; menu entries
+   that open a dialog, alert or file selector do so first.  FMD_FINISH and
+   menu_bar() draw the desktop again. */
+
+static short direct_ok;             /* the screen is the shifter's */
+static short pal_old[4];
+
+static void full_check(short planes)
+{
+	long vdo;
+	short rez = Getrez();
+
+	direct_ok = 0;
+	if (!has_acia || Getcookie(C__VDO, &vdo) != C_FOUND || ((unsigned long)vdo >> 16) > 2)
+		return;                         /* ST, STE, TT shifter only */
+	if (Logbase() != Physbase() || scr.g_w != 640)
+		return;
+	if (rez == 2 && planes == 1 && scr.g_h == 400)
+		scr_medium = 0;
+	else if (rez == 1 && planes == 2 && scr.g_h == 200)
+		scr_medium = 1;
+	else
+		return;
+	direct_ok = 1;
+	gk_expand();
+}
+
+static void full_enter(void)
+{
+	short i, top, bot;
+
+	if (full || win < 0)
+		return;
+	kb_release();
+	wind_update(BEG_UPDATE);
+	wind_update(BEG_MCTRL);
+	graf_mouse(M_OFF, NULL);
+	if (direct_ok) {
+		full = FULL_ST;
+		scr_base = Physbase();
+		memset(scr_base, 0xFF, 32000);
+		if (scr_medium) {
+			static const short pal[4] = { 0x000, 0x000, 0x777, 0x000 };
+
+			for (i = 0; i < 4; i++) {
+				pal_old[i] = Setcolor(i, -1);
+				Setcolor(i, pal[i]);
+			}
+		}
+		ace_state[ST_REDRAW] = 1;       /* every cell */
+	} else {
+		full = FULL_VDI;
+		wwork = scr;
+		set_scale();
+		must_draw = 1;
+		render(&top, &bot);             /* all cells into pic */
+		paint(&scr);
+	}
+	menu_icheck(menu, MI_FULL, 1);
+}
+
+static void full_leave(void)
+{
+	short i;
+
+	if (!full)
+		return;
+	if (full == FULL_ST && scr_medium)
+		for (i = 0; i < 4; i++)
+			Setcolor(i, pal_old[i]);
+	full = 0;
+	graf_mouse(M_ON, NULL);
+	wind_update(END_MCTRL);
+	wind_update(END_UPDATE);
+	wind_get(win, WF_WORKXYWH, &wwork.g_x, &wwork.g_y, &wwork.g_w, &wwork.g_h);
+	set_scale();
+	must_draw = 1;
+	menu_icheck(menu, MI_FULL, 0);
+	form_dial(FMD_FINISH, 0, 0, 0, 0, scr.g_x, scr.g_y, scr.g_w, scr.g_h);
+	menu_bar(menu, 1);
+	set_title();
+}
+
+/* ---------------------------------------------------------------- */
+/* sound                                                             */
+/* ---------------------------------------------------------------- */
+
+/* BEEP plays a tone of period m (YM units of 8 us) while the Ace waits
+   (src/kernel/z80core.s beep); the kernel calls gem_sound() for its start
+   and its end.  With the Falcon sound XBIOS (_SND CODEC bit: Falcon, CT60,
+   ARAnyM, which has no YM sound) a square wave loops in a DMA buffer, as
+   in the Pong game; otherwise the YM's channel A plays it through XBIOS
+   Giaccess(), which works in user mode. */
+
+#define SND_YM      0x01                    /* _SND cookie bits */
+#define SND_CODEC   0x04
+#define SND_RATE    24585L                  /* CLK25K */
+#define SND_FRAMES  8192                    /* 16-bit stereo frames */
+#define SND_MIN     4096                    /* the buffer holds k periods */
+#define SND_LEVEL   6000
+#define BEEPVOL     14
+
+enum { OUT_NONE, OUT_YM, OUT_CODEC };
+static short snd_out;
+static short *snd_buf;                      /* ST-RAM */
+static short snd_on;
+
+static void sound_init(void)
+{
+	long snd;
+
+	if (Getcookie(C__SND, &snd) != C_FOUND)
+		snd = -1;                       /* TOS 1.0x: a plain ST */
+	if (snd > 0 && (snd & SND_CODEC)) {
+		snd_buf = (short *)Mxalloc(SND_FRAMES * 4L, 0);
+		if ((long)snd_buf > 0) {
+			if (Locksnd() == 1) {
+				Sndstatus(SND_RESET);
+				Unlocksnd();
+			}
+			snd_out = OUT_CODEC;
+			return;
+		}
+		snd_buf = NULL;
+	}
+	if (snd < 0 || (snd & SND_YM))
+		snd_out = OUT_YM;
+}
+
+/* k whole periods of a square wave of period m, at least SND_MIN
+   frames; returns the frames */
+static long square(long m)
+{
+	unsigned long long per1000 = (unsigned long long)m * SND_RATE * 8 / 1000;  /* frames * 1000 */
+	long k = (long)((SND_MIN * 1000ULL + per1000 - 1) / per1000);
+	long n = (long)((k * per1000 + 500) / 1000), i;
+	unsigned long acc = 0, half = (unsigned long)m * SND_RATE * 4;  /* us * rate */
+	short v = SND_LEVEL, *p = snd_buf;
+
+	if (n > SND_FRAMES)
+		n = SND_FRAMES;
+	for (i = 0; i < n; i++) {
+		*p++ = v;
+		*p++ = v;
+		acc += 1000000UL;
+		while (acc >= half) {
+			acc -= half;
+			v = -v;
+		}
+	}
+	return n;
+}
+
+static void sound_off(void)
+{
+	if (!snd_on)
+		return;
+	snd_on = 0;
+	if (snd_out == OUT_CODEC) {
+		if (Locksnd() == 1) {
+			Buffoper(0);
+			Unlocksnd();
+		}
+	} else if (snd_out == OUT_YM) {
+		Giaccess(0, 0x88);              /* channel A volume */
+		Giaccess(Giaccess(0, 7) | 0x3F, 0x87);
+	}
+}
+
+/* called by the kernel (gem/glue.s host_snd_on/off): period 1..4095,
+   0 = off */
+void gem_sound(long period)
+{
+	if (!period) {
+		sound_off();
+		return;
+	}
+	if (snd_out == OUT_CODEC) {
+		long n = square(period);
+
+		if (Locksnd() != 1)
+			return;                     /* another program plays */
+		Buffoper(0);
+		Settracks(0, 0);
+		Setmontracks(0);
+		Setmode(MODE_STEREO16);
+		Soundcmd(ADDERIN, MATIN);
+		Devconnect(DMAPLAY, DAC, CLK25M, CLK25K, NO_SHAKE);
+		Setbuffer(SR_PLAY, snd_buf, snd_buf + n * 2);
+		Buffoper(SB_PLA_ENA | SB_PLA_RPT);
+		Unlocksnd();
+		snd_on = 1;
+	} else if (snd_out == OUT_YM) {
+		Giaccess(period & 0xFF, 0x80);
+		Giaccess((period >> 8) & 0x0F, 0x81);
+		Giaccess(BEEPVOL, 0x88);
+		Giaccess((Giaccess(0, 7) & 0xC0) | 0x3E, 0x87);   /* tone A only */
+		snd_on = 1;
+	}
+}
+
+static void sound_exit(void)
+{
+	sound_off();
+	if (snd_buf)
+		Mfree(snd_buf);
+	snd_buf = NULL;
 }
 
 /* ---------------------------------------------------------------- */
@@ -949,6 +1256,7 @@ static void ctrl_key(short ch)
 	case 's': item = MI_SETTINGS; break;
 	case 'w': item = ACT_CLOSEW; break;
 	case 'k': item = MI_KEYBOARD; break;
+	case 'f': item = MI_FULL; break;
 	}
 	if (item && !pending)
 		pending = item;
@@ -997,7 +1305,10 @@ static void ring_keys(void)
 		_KEYTAB *kt = (_KEYTAB *)Keytbl((void *)-1, (void *)-1, (void *)-1);
 
 		rout = (rout + 1) & 15;
-		if (sc == SC_Q)
+		if (sc == SC_UNDO) {
+			if (full && !pending)
+				pending = MI_FULL;
+		} else if (sc == SC_Q)
 			want_quit = 1;
 		else if (kt && sc < 128)
 			ctrl_key((unsigned char)kt->unshift[sc]);
@@ -1047,7 +1358,8 @@ static short key_find(const char *t)
    the other objects of the root (the buttons) in a row at the bottom. */
 static int is_frame(OBJECT *t, short i)
 {
-	return (t[i].ob_type & 0xFF) == G_BUTTON && (t[i].ob_state & 0xFF00) == 0xFE00;
+	return ((t[i].ob_type & 0xFF) == G_BUTTON || (t[i].ob_type & 0xFF) == G_IBOX) &&
+	       (t[i].ob_state & 0xFF00) == 0xFE00;
 }
 
 static short btn_h(void)
@@ -1067,6 +1379,9 @@ static void frame_rows(OBJECT *t, short i, short rows)
 {
 	short bh = btn_h(), rh = row_h();
 	short ft = gl_hchar + gl_hchar / 4;     /* frame title */
+
+	if ((t[i].ob_type & 0xFF) == G_IBOX)
+		ft = 0;                         /* an invisible group: no title */
 	short o;
 
 	for (o = t[i].ob_head; o != i && o >= 0; o = t[o].ob_next)
@@ -1216,6 +1531,7 @@ static void settings_fill(void)
 	short i;
 
 	popup_show(D_RAM, rampop, ram_index());
+	set_state(dialog, D_LIMIT, OS_SELECTED, speed_on());
 	for (i = 0; i < 5; i++)
 		key_name(ace_joy_map[i], key_text[i]);
 }
@@ -1256,6 +1572,10 @@ static int settings_exit(WDIALOG *d, short obj)
 				redraw_wdobj(wd, D_RAM);
 			}
 		}
+		return 0;
+	case D_LIMIT:
+		speed_limit = get_state(dialog, D_LIMIT, OS_SELECTED);
+		speed_set(speed_limit);
 		return 0;
 	case D_CLOSE:
 	case WD_CLOSER:
@@ -1332,6 +1652,70 @@ static int choose(char *path, char *name, short title, const char *mask, char *f
 	return 1;
 }
 
+/* memory other programs may read (global under MiNT and MagiC) */
+static void *global_alloc(long size)
+{
+	long v;
+	void *p;
+
+	if (Getcookie(C_MagX, &v) == C_FOUND || Getcookie(C_MiNT, &v) == C_FOUND)
+		p = (void *)Mxalloc(size, 0 | MX_GLOBAL_AV);
+	else
+		p = (void *)Malloc(size);
+	return (long)p > 0 ? p : NULL;
+}
+
+/* a pointer in two words of a message, and back */
+static char *msg_ptr(const short *w)
+{
+	return (char *)(((unsigned long)(unsigned short)w[0] << 16) | (unsigned short)w[1]);
+}
+
+static void ptr_msg(short *w, const void *p)
+{
+	w[0] = (short)((unsigned long)p >> 16);
+	w[1] = (short)(unsigned long)p;
+}
+
+/* Document History: tell the DHST server (the 'DHST' cookie) about a tape
+   or snapshot we opened; DHST_ACK gives the block back */
+typedef struct {
+	char *appname, *apppath, *docname, *docpath;
+} DHSTINFO;
+
+static void dhst_add(const char *path)
+{
+	long id;
+	DHSTINFO *di;
+	char app[300], *t;
+	const char *base = strrchr(path, '\\');
+	short msg[8];
+
+	if (Getcookie(0x44485354L, &id) != C_FOUND || id < 0 || (short)id == gl_apid)
+		return;
+	app_folder(app);
+	strcat(app, "ACEGEM.APP");
+	base = base ? base + 1 : path;
+	di = global_alloc(sizeof *di + 7 + strlen(app) + 1 + strlen(path) + 1 + strlen(base) + 1);
+	if (!di)
+		return;
+	t = (char *)(di + 1);
+	di->appname = strcpy(t, "ACEGEM");
+	t += 7;
+	di->apppath = strcpy(t, app);
+	t += strlen(t) + 1;
+	di->docpath = strcpy(t, path);
+	t += strlen(t) + 1;
+	di->docname = strcpy(t, base);
+	msg[0] = (short)DHST_ADD;
+	msg[1] = gl_apid;
+	msg[2] = 0;
+	ptr_msg(&msg[3], di);
+	msg[5] = msg[6] = msg[7] = 0;
+	if (!appl_write((short)id, 16, msg))
+		Mfree(di);
+}
+
 /* File > Open tape: the tape for the next LOAD / SAVE (a new name makes
    a new, empty tape, as in ACE.PRG) */
 static void open_tape(void)
@@ -1345,6 +1729,7 @@ static void open_tape(void)
 		return;
 	kernel_tape_close();
 	strcpy(ace_tapename, full);
+	dhst_add(full);
 }
 
 /* File > Load snapshot: 1 = read, the kernel starts it */
@@ -1359,8 +1744,10 @@ static int load_snap(void)
 	graf_mouse(BUSYBEE, NULL);
 	r = ace_snap_read(full);
 	graf_mouse(ARROW, NULL);
-	if (r == 0)
+	if (r == 0) {
+		dhst_add(full);
 		return 1;
+	}
 	alert(r == -2 ? AL_NOSNAP : r == -3 ? AL_NOMEM : AL_NOFILE);
 	return 0;
 }
@@ -1513,6 +1900,8 @@ static void inf_load(void)
 			dlg_x = a; dlg_y = b;
 		} else if (sscanf(line, "KEYBOARD %d %d %d", &a, &b, &c) == 3) {
 			kb_x = a; kb_y = b; kb_reopen = c;
+		} else if (sscanf(line, "SPEED %d", &a) == 1) {
+			speed_limit = a != 0;
 		} else if (sscanf(line, "ABOUT %d %d", &a, &b) == 2) {
 			abt_x = a; abt_y = b;
 		} else if (strncmp(line, "TAPES ", 6) == 0)
@@ -1535,6 +1924,8 @@ static void inf_save(void)
 		key_name(ace_joy_map[i], n[i]);
 	fprintf(f, "RAM %dK\n", 3 + 16 * ram_index());
 	fprintf(f, "JOYSTICK %s %s %s %s %s\n", n[0], n[1], n[2], n[3], n[4]);
+	if (speed_limit >= 0)
+		fprintf(f, "SPEED %d\n", speed_limit);
 	if (win_place.g_w > 0)
 		fprintf(f, "WINDOW %d %d %d %d\n", win_place.g_x, win_place.g_y,
 		        win_place.g_w, win_place.g_h);
@@ -1552,13 +1943,221 @@ static void inf_save(void)
 }
 
 /* ---------------------------------------------------------------- */
+/* a file from the desktop (VA_START, drag & drop, the command line):
+   a snapshot (.ACE) starts, anything else is the tape for the next LOAD */
+static int is_snap(const char *path)
+{
+	const char *dot = strrchr(path, '.');
+
+	return dot && strrchr(path, '\\') < dot && (dot[1] == 'A' || dot[1] == 'a') &&
+	       (dot[2] == 'C' || dot[2] == 'c') && (dot[3] == 'E' || dot[3] == 'e') && !dot[4];
+}
+
+static void open_path(const char *path)
+{
+	if (!path[0] || strlen(path) >= 169)
+		return;
+	strcpy(open_req, path);
+	if (!pending || pending == ACT_OPEN)
+		pending = ACT_OPEN;
+	if (win >= 0 && !iconified && !full)
+		wind_set(win, WF_TOP, win, 0, 0, 0);
+}
+
+/* ACT_OPEN, with the hook out: GF_SNAP when a snapshot is read */
+static int open_req_now(void)
+{
+	int r;
+
+	if (!is_snap(open_req)) {
+		kernel_tape_close();
+		strcpy(ace_tapename, open_req);
+		dhst_add(open_req);
+		return GF_GO;
+	}
+	graf_mouse(BUSYBEE, NULL);
+	r = ace_snap_read(open_req);
+	graf_mouse(ARROW, NULL);
+	if (r == 0) {
+		dhst_add(open_req);
+		return GF_SNAP;
+	}
+	alert(r == -2 ? AL_NOSNAP : r == -3 ? AL_NOMEM : AL_NOFILE);
+	return GF_GO;
+}
+
+/* the first file name of a command line: in quotes ('...', '' is a
+   quote) if it has blanks */
+static void first_name(const char *cmd, char *out, short max)
+{
+	short n = 0;
+
+	while (*cmd == ' ')
+		cmd++;
+	if (*cmd == '\'') {
+		cmd++;
+		while (*cmd && n < max - 1) {
+			if (*cmd == '\'') {
+				if (cmd[1] != '\'')
+					break;
+				cmd++;
+			}
+			out[n++] = *cmd++;
+		}
+	} else
+		while (*cmd && *cmd != ' ' && n < max - 1)
+			out[n++] = *cmd++;
+	out[n] = 0;
+}
+
+static void do_va_start(short *msg)
+{
+	char *cmd = msg_ptr(&msg[3]);
+	char name[256];
+	short reply[8];
+
+	name[0] = 0;
+	if (cmd)
+		first_name(cmd, name, sizeof name);
+	reply[0] = AV_STARTED;              /* the sender may free the line now */
+	reply[1] = gl_apid;
+	reply[2] = 0;
+	reply[3] = msg[3];
+	reply[4] = msg[4];
+	reply[5] = reply[6] = reply[7] = 0;
+	appl_write(msg[1], 16, reply);
+	open_path(name);
+}
+
+/* Our part of the AV protocol: we tell the AV server (the desktop:
+   Thing, Jinnee, the MagiC desktop, ...) that we understand VA_START,
+   AV_STARTED and quoted names, and announce the Ace window, so files
+   dropped on it come as VA_DRAGACCWIND.  At the end AV_ACCWINDCLOSED and
+   AV_EXIT. */
+static short av_server = -1;
+
+static void av_send(short type, short w3, const void *ptr)
+{
+	short msg[8];
+
+	if (av_server < 0)
+		return;
+	msg[0] = type;
+	msg[1] = gl_apid;
+	msg[2] = 0;
+	msg[3] = w3;
+	msg[4] = msg[5] = 0;
+	ptr_msg(&msg[6], ptr);
+	appl_write(av_server, 16, msg);
+}
+
+static void av_init(void)
+{
+	static const char *const names[] = {
+		"AVSERVER", "GEMINI  ", "THING   ", "JINNEE  ", "MAGXDESK"
+	};
+	char *env = NULL, name[9], *av_name;
+	short i;
+
+	if (shel_envrn(&env, "AVSERVER=") && env && *env) {
+		for (i = 0; i < 8 && env[i] && env[i] != '.'; i++)
+			name[i] = env[i] >= 'a' && env[i] <= 'z' ? env[i] - 32 : env[i];
+		while (i < 8)
+			name[i++] = ' ';
+		name[8] = 0;
+		av_server = appl_find(name);
+	}
+	for (i = 0; av_server < 0 && i < (short)(sizeof names / sizeof names[0]); i++)
+		av_server = appl_find(names[i]);
+	if (av_server < 0 || av_server == gl_apid) {
+		av_server = -1;
+		return;
+	}
+	av_name = global_alloc(10);
+	if (!av_name) {
+		av_server = -1;
+		return;
+	}
+	strcpy(av_name, "ACEGEM  ");
+	av_send(AV_PROTOKOLL, 0x0002 | 0x0004 | 0x0010, av_name);
+	if (win >= 0)
+		av_send(AV_ACCWINDOPEN, win, NULL);
+}
+
+static void av_exit(void)
+{
+	if (win >= 0)
+		av_send(AV_ACCWINDCLOSED, win, NULL);
+	av_send(AV_EXIT, gl_apid, NULL);
+	av_server = -1;
+}
+
+static void va_dragaccwind(short *msg)
+{
+	char *names = msg_ptr(&msg[6]);
+	char name[256];
+
+	if (!names)
+		return;
+	first_name(names, name, sizeof name);
+	open_path(name);
+}
+
+/* Drag & drop protocol (MiNT, MagiC): we take ARGS (file names) */
+static void drag_drop(short *msg)
+{
+	static char exts[DD_EXTSIZE] = "ARGS";
+	char name[DD_NAMEMAX], ext[5], file[256], *args;
+	long size;
+	int fd;
+
+	fd = dd_open(msg[7], exts);
+	if (fd < 0)
+		return;
+	for (;;) {
+		if (!dd_rtry(fd, name, ext, &size))
+			break;
+		if (strncmp(ext, "ARGS", 4) == 0 && size > 0 && size < 4096) {
+			if (!dd_reply(fd, DD_OK))
+				return;
+			args = malloc(size + 1);
+			if (!args)
+				break;
+			if (Fread(fd, size, args) != size) {
+				free(args);
+				break;
+			}
+			args[size] = 0;
+			dd_close(fd);
+			first_name(args, file, sizeof file);
+			free(args);
+			open_path(file);
+			return;
+		}
+		if (!dd_reply(fd, DD_EXT))
+			return;
+	}
+	dd_close(fd);
+}
+
+/* ---------------------------------------------------------------- */
 /* menu actions                                                      */
 /* ---------------------------------------------------------------- */
 
 /* one action, with the hook out; returns what the kernel is to do */
 static int do_action(short item)
 {
+	/* dialogs, alerts and file selectors need the desktop */
+	if (full && item != MI_FULL && item != MI_RESET && item != MI_PAUSE &&
+	    item != MI_SHOT && item != MI_QUIT)
+		full_leave();
 	switch (item) {
+	case MI_FULL:
+		if (full)
+			full_leave();
+		else if (!iconified)
+			full_enter();
+		break;
 	case MI_ABOUT:
 		about();
 		break;
@@ -1591,6 +2190,8 @@ static int do_action(short item)
 		else
 			kb_open();
 		break;
+	case ACT_OPEN:
+		return open_req_now();
 	case ACT_RAMRESET:
 		ace_ram_last = (ram_new << 14) | 0x3FFF;
 		return GF_RESET;
@@ -1621,7 +2222,7 @@ static void message(short *msg)
 {
 	GRECT r;
 
-	switch (msg[0]) {
+	switch ((unsigned short)msg[0]) {
 	case MN_SELECTED:
 		if (!pending)
 			pending = msg[4];
@@ -1629,6 +2230,20 @@ static void message(short *msg)
 		return;
 	case AP_TERM:
 		want_quit = 1;
+		return;
+	case VA_START:
+		do_va_start(msg);
+		return;
+	case VA_DRAGACCWIND:
+		va_dragaccwind(msg);
+		return;
+	case VA_PROTOSTATUS:
+		return;
+	case AP_DRAGDROP:
+		drag_drop(msg);
+		return;
+	case DHST_ACK:
+		Mfree(msg_ptr(&msg[3]));
 		return;
 	}
 	if (message_wdial(msg) || kb_message(msg))
@@ -1655,10 +2270,17 @@ static void message(short *msg)
 		r.g_y = msg[5];
 		r.g_w = msg[6];
 		r.g_h = msg[7];
+		if (iconified) {
+			wind_set(win, WF_CURRXYWH, r.g_x, r.g_y, r.g_w, r.g_h);
+			wind_get(win, WF_WORKXYWH, &iwork.g_x, &iwork.g_y, &iwork.g_w, &iwork.g_h);
+			break;
+		}
 		fulled = 0;
 		set_border(&r);
 		break;
 	case WM_FULLED:
+		if (iconified)
+			break;
 		if (fulled) {
 			r = wfull_old;
 			fulled = 0;
@@ -1669,6 +2291,24 @@ static void message(short *msg)
 			fulled = 1;
 		}
 		set_border(&r);
+		break;
+	case WM_ICONIFY:
+		if (iconified || full)
+			break;
+		wind_get(win, WF_CURRXYWH, &icon_old.g_x, &icon_old.g_y,
+		         &icon_old.g_w, &icon_old.g_h);
+		wind_set(win, WF_ICONIFY, msg[4], msg[5], msg[6], msg[7]);
+		wind_get(win, WF_WORKXYWH, &iwork.g_x, &iwork.g_y, &iwork.g_w, &iwork.g_h);
+		iconified = 1;
+		break;
+	case WM_UNICONIFY:
+		if (!iconified)
+			break;
+		wind_set(win, WF_UNICONIFY, msg[4], msg[5], msg[6], msg[7]);
+		iconified = 0;
+		wind_get(win, WF_WORKXYWH, &wwork.g_x, &wwork.g_y, &wwork.g_w, &wwork.g_h);
+		set_scale();
+		must_draw = 1;
 		break;
 	}
 }
@@ -1688,7 +2328,7 @@ static void mdial_messages(short *msg)
 
 /* one evnt_multi; wait (the Ace waits) blocks, but looks every 20 ms
    while the hook is still going out */
-static void events(int wait)
+static int events(int wait)
 {
 	short msg[8], mx, my, mb, ks, kr, br, ev;
 	short timer = !wait || gk_hooked || kb_any_lit() || kb_click >= 0;
@@ -1712,15 +2352,19 @@ static void events(int wait)
 			if (!ch && kt && sc < 128)
 				ch = (unsigned char)kt->unshift[sc];
 			ctrl_key(ch);
-		} else if (!key_wdial(kr, ks))
+		} else if (full && sc == SC_UNDO) {
+			if (!pending)
+				pending = MI_FULL;
+		} else if (full || !key_wdial(kr, ks))
 			aes_key(ks, kr);
 	}
-	if ((ev & MU_BUTTON) && (mb & 1)) {
+	if ((ev & MU_BUTTON) && (mb & 1) && !full) {
 		if (kb_press(mx, my))
 			kb_mouse_prev = 1;          /* not again from kb_poll() */
 		else if (wait)
 			click_wdial(br, mx, my, ks, mb);
 	}
+	return (ev & MU_MESAG) != 0;
 }
 
 #ifdef STATS
@@ -1766,6 +2410,7 @@ int gem_frame(void)
 	stats();
 	t = ticks();
 #endif
+	speed_frame();
 	ring_keys();
 	aes_keys_expire();
 	kb_poll();
@@ -1806,8 +2451,15 @@ int gem_frame(void)
 	if (++ev_div >= 3 || want_quit) {
 		short waited = 0;
 
+		int n = 0;
+
 		ev_div = 0;
-		events(0);
+		/* a window drag sends a stream of messages: take them all (up to
+		   a few) and look again at the next frame, or the window trails */
+		while (events(0) && ++n < 8 && !want_quit && !pending)
+			;
+		if (n)
+			ev_div = 2;
 		/* paused, or not on top (a dialog, another program): the Ace waits */
 		while (!want_quit && !pending && (paused || !on_top())) {
 			keys_manage(0);
@@ -1835,11 +2487,13 @@ static int acia_machine(void)
 	long v;
 
 	if (Getcookie(0x4D674D63L, &v) == C_FOUND ||     /* MgMc: MagiC Mac */
-	    Getcookie(0x4D675043L, &v) == C_FOUND)       /* MgPC: MagiC PC */
+	    Getcookie(0x4D675043L, &v) == C_FOUND ||     /* MgPC: MagiC PC */
+	    Getcookie(0x4D674D78L, &v) == C_FOUND)       /* MgMx: MagiC Mac X,
+	                                                    MagiC-on-Linux */
 		return 0;
 	if (Getcookie(C__MCH, &v) != C_FOUND)
 		return 1;
-	return (v >> 16) <= 3;                          /* ST, STE, TT, Falcon */
+	return ((unsigned long)v >> 16) <= 3;          /* ST, STE, TT, Falcon */
 }
 
 static void patch_flags(void)
@@ -1892,6 +2546,17 @@ static void find_inf(void)
 
 /* MyAES: its ID from appl_getinfo_str(AES_VERSION), else an application
    of that name (as in the CHIP-8 emulator) */
+static int can_iconify(void)
+{
+	short o1, o2, o3, o4;
+
+	if (_AESversion < 0x400 && appl_find("?AGI") != 0)
+		return 0;                       /* no appl_getinfo */
+	if (!appl_getinfo(AES_WINDOW, &o1, &o2, &o3, &o4))
+		return 0;
+	return (o1 & 0x80) != 0;
+}
+
 static int is_myaes(void)
 {
 	static char id[12], name[256], info[256], more[256];
@@ -1916,7 +2581,7 @@ static void quit_gem(void)
 	exit_gem();
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
 	short work_in[11], work_out[57], d, i;
 	long rate, v;
@@ -1961,6 +2626,9 @@ int main(void)
 		return 1;
 	}
 	wind_get(0, WF_WORKXYWH, &desk.g_x, &desk.g_y, &desk.g_w, &desk.g_h);
+	scr.g_x = scr.g_y = 0;
+	scr.g_w = work_out[0] + 1;
+	scr.g_h = work_out[1] + 1;
 
 	for (i = 0; i < 5; i++)
 		key_text[i] = dialog[key_obj[i]].ob_spec.tedinfo->te_ptext;
@@ -1984,14 +2652,23 @@ int main(void)
 	inf_load();
 	kernel_init();
 	patch_flags();
+	if (speed_limit >= 0)
+		speed_set(speed_limit);
+	else                                /* the default: on with a 68020 or later */
+		speed_set(Getcookie(C__CPU, &v) == C_FOUND && v >= 20);
 
 	has_acia = acia_machine();
+	vq_extnd(vh, 1, work_out);
+	full_check(work_out[4]);
+	sound_init();
 	rate = Kbrate(-1, -1);
 	hold_first = ((rate >> 8) & 0xFF) * 4 + 10; /* Kbrate counts 20 ms */
 	hold_next = (rate & 0xFF) * 4 + 10;
 
 	create_menu(menu);
 	aesfix_userdefs(menu);
+	if (can_iconify())
+		win_kind |= SMALLER;
 	if (!open_window()) {
 		alert(AL_NOWINDOW);
 		delete_menu();
@@ -2000,10 +2677,17 @@ int main(void)
 	}
 	if (kb_reopen)
 		kb_open();
+	av_init();
 	Supexec(gk_timer_on);
 	key_quiet = ticks();
 
-	r = kernel_run(0);
+	/* a tape or snapshot given on the command line */
+	r = 0;
+	if (argc > 1 && strlen(argv[1]) < 169) {
+		strcpy(open_req, argv[1]);
+		r = open_req_now() == GF_SNAP;
+	}
+	r = kernel_run(r);
 
 	/* let the keys go up (Control+Q), at most 3 seconds */
 	if (gk_hooked) {
@@ -2019,6 +2703,8 @@ int main(void)
 		}
 	}
 	Supexec(gk_timer_off);
+	sound_exit();
+	full_leave();
 	if (r < 0)
 		alert(AL_BADOP);
 
@@ -2033,6 +2719,7 @@ int main(void)
 	}
 	kb_reopen = kbw >= 0;
 	kb_close();
+	av_exit();
 	close_window();
 	inf_save();
 	if (wd)

@@ -23,6 +23,7 @@ int memattr[8] = {0, 1, 1, 1, 1, 1, 1, 1};
 volatile int interrupted;
 int reset_ace;
 unsigned long tstates, tsmax = 0xffffffffUL;
+static unsigned long wcnt[65536], wts[65536], dsts;
 static unsigned long tstart, kbsteps, kbcalls, kbts, fnsteps, fncalls, fnts, dscalls;
 static unsigned long natsteps, natcalls, natts, beeps;
 
@@ -289,7 +290,7 @@ int main(int argc, char **argv)
           goto again;
         mem[0x84e] = 0xed; mem[0x84f] = 0xfb;
       }
-      if (ds && inwin) dscalls++;
+      if (ds && inwin) { dscalls++; dsts += tstates - kbt0; }
       /* ... and the BEEP loop up to the EI at 0BC4 */
       if (bp) {
         if (pc != 0xbc4)
@@ -305,7 +306,8 @@ int main(int argc, char **argv)
         if (lastop != 0x4c5 && !(mem[lastop] == 0xfd && mem[lastop + 1] == 0xe9))
           goto again;
         mem[0x84e] = 0xed; mem[0x84f] = 0xfb;
-        if (inwin) { natcalls++; natts += tstates - kbt0; }
+        if (inwin) { natcalls++; natts += tstates - kbt0;
+          wcnt[start]++; wts[start] += tstates - kbt0; }
       }
       natprev = nat ? lastop == 0x4c5 : fn && fnfast;
       /* ... and the Forth checks + NEXT at 04C8 up to the JP (HL) at 04C5 */
@@ -417,6 +419,12 @@ int main(int argc, char **argv)
            kbcalls, kbsteps, kbts);
   if (dscalls)
     printf("window: %lu data stack pushes/pops\n", dscalls);
+  if (getenv("NATSTAT")) {
+    unsigned k;
+    for (k = 0; k < 65536; k++)
+      if (wcnt[k]) printf("word %04X: %lu calls, %.1f T\n", k, wcnt[k], (double)wts[k] / wcnt[k]);
+    if (dscalls) printf("data stack: %.1f T each\n", (double)dsts / dscalls);
+  }
   if (natcalls)
     printf("window: %lu native Forth words, %lu Z80 instructions, %lu T-states in them\n",
            natcalls, natsteps, natts);

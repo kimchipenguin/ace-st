@@ -64,7 +64,11 @@ z80_reset:
         jsr     keys_up
         movea.w ram_last,a3
         lea     mem,a5
+        ifd     GEMAPP
+        movea.l _ace_slots,a4               ; slot_mid or the speed stubs
+        else
         lea     slot_base+$8000,a4          ; slot_mid
+        endif
         movea.l a5,a0                       ; PC = 0
         movea.l a5,a1
         adda.l  #65536,a1                   ; SP = 0

@@ -47,12 +47,25 @@ long gk_ikbd_on(void);
 long gk_ikbd_off(void);
 long gk_flush030(void);
 long gk_flush040(void);
+void gk_expand(void);
+void gk_refresh(void *screen, int medium);  /* ST high / medium, direct */
 
 extern volatile unsigned char gk_down[128];  /* ST keys held (hooked) */
-extern volatile unsigned char gk_ring[16];   /* Control + key make codes */
+extern volatile unsigned char gk_ring[16];   /* Control + key, Undo make codes */
 extern volatile unsigned char gk_rin;
 extern volatile unsigned char gk_hooked;     /* 0xFF hooked, 1 going, 0 off */
 
+/* speed limit (gem/speed.c): the kernel's dispatch tables */
+extern unsigned char ace_slot_base[];       /* main opcode handlers, 256 bytes each */
+extern void *ace_slots;                     /* a4: ace_slot_base + 0x8000 or stubs */
+extern volatile long ace_budget;            /* T-states left in this frame */
+extern void *ace_natab[8192];               /* native Forth words by ROM address */
+extern void *ace_cb_table[256], *ace_dd_table[256], *ace_ed_table[256];
+extern void *ace_fd_table[256], *ace_ddcb_table[256];
+void gk_throttle(void);                     /* calls gem_throttle(), keeps registers */
+void gem_throttle(void);
+
 int gem_frame(void);            /* called by the kernel every 20 ms */
+void gem_sound(long period);    /* BEEP: YM tone period, 0 = off */
 
 #endif
